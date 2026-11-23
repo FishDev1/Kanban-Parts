@@ -280,12 +280,13 @@ function thumb(img){const key=img.dataset.key;phQ.push(async()=>{
 const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){io.unobserve(e.target);thumb(e.target);}},{rootMargin:'300px'});
 function watchThumbs(root){$$('img[data-key]',root).forEach(i=>io.observe(i));}
 async function fullURL(key){const f=await photoFile(key);return f?URL.createObjectURL(f):null;}
+const isCad=n=>/\.(dwg|slddrw|sldprt)$/i.test(n);
 async function dwgFiles(key){
  if(!S.dwgDir||!key)return [];
  if(!S.dwgIdx){S.dwgIdx=new Map();try{for await(const [n,h] of S.dwgDir.entries())if(h.kind==='directory')S.dwgIdx.set(n.toLowerCase(),{h,files:null});}catch(e){}}
  const d=key[0];let ent=null;for(const [n,v] of S.dwgIdx)if(n.startsWith(d)&&n.endsWith('xxx'))ent=v;
  if(!ent)return [];
- if(!ent.files){ent.files=[];try{for await(const [n,h] of ent.h.entries())if(h.kind==='file'&&/\.(pdf|png|jpe?g)$/i.test(n))ent.files.push([n,h]);}catch(e){}}
+ if(!ent.files){ent.files=[];try{for await(const [n,h] of ent.h.entries())if(h.kind==='file'&&/\.(pdf|png|jpe?g|dwg|slddrw|sldprt)$/i.test(n))ent.files.push([n,h,ent.h.name]);}catch(e){}}
  const re=new RegExp('(^|[^0-9])'+key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([^0-9]|$)');
  return ent.files.filter(([n])=>re.test(n));}
 
@@ -426,7 +427,8 @@ async function openPart(id,opts2){
  GROUPS.map(([g,fs])=>'<div class="ghd">'+g+'</div><div class="fg">'+fs.filter(f=>!(isNew&&g==='System')).map(f=>inputFor(f,p,edit,isNew)).join('')+'</div>').join('')+'</div>';
  d.classList.add('open');
  if(!isNew){const key=fileKey(p);fullURL(key).then(u=>{const im=$('#bigph');if(!im)return;if(u){im.src=u;im.style.display='block';}else $('#phnote').textContent='No photo found for '+key;});
-  dwgFiles(key).then(fs=>{const e=$('#dwl');if(!e||!S.dwgDir)return;e.innerHTML=fs.length?fs.map(([n,h],i)=>'<a data-dwg="'+i+'" data-key="'+esc(key)+'">'+esc(n)+'</a>').join(''):'<span class="muted">No PDF or PNG found for '+esc(key)+'</span>';e._files=fs;});}}
+  dwgFiles(key).then(fs=>{const e=$('#dwl');if(!e||!S.dwgDir)return;const root=(cfg().dwgUnc||cfg().dwgPath||'').replace(/[\\\/]+$/,'');
+   e.innerHTML=fs.length?fs.map(([n,h,fo],i)=>{const cad=isCad(n);return '<div style="margin:2px 0"><a data-dwg="'+i+'">'+esc(n)+'</a>'+(cad?' <span class="chip">'+n.split('.').pop().toUpperCase()+' · downloads</span>':'')+(root?' <button data-dwgcopy="'+i+'" data-path="'+esc(root+'\\'+fo+'\\'+n)+'" style="padding:1px 8px">Copy path</button>':'')+'</div>';}).join(''):'<span class="muted">No drawing files found for '+esc(key)+'</span>';e._files=fs;});}}
 function closeDrawer(){$('#drawer').classList.remove('open');S.editing=null;S.edit=null;}
 function collect(){const o={};$$('#drawer [data-k]').forEach(el=>{if(el.disabled)return;const k=el.dataset.k;let v=el.value.trim();
  if(v===''){o[k]=undefined;return;}
@@ -599,7 +601,9 @@ document.addEventListener('click',async e=>{
  if(id==='dQueue'){S.queue.add(S.edit.id);saveQueue();toast('Added to queue');return openPart(S.edit.id);}
  if(id==='dTag'){const p=S.byId.get(S.edit.id);try{await patch([p.id],{'Delete Tag':p['Delete Tag']?undefined:today()+' - tagged by '+(S.user||'?')});}catch(er){return modal('Error',esc(er.message));}render();return openPart(p.id);}
  if(id==='dDup'){if(!await needUser())return;const p=JSON.parse(JSON.stringify(S.byId.get(S.edit.id)));const fresh={...p,id:'new'};['Rack Location','Card ID','Delete Tag','Card Printed Date','Placed In Rack','Card Done/Shipped Date','Last Edited','Last Edited By'].forEach(k=>delete fresh[k]);fresh['Card Status']='Setup - Needs Info';return openPart('new',{isNew:true,fresh});}
- const dw=t.closest('[data-dwg]');if(dw){e.preventDefault();const files=$('#dwl')._files;const w=window.open('','_blank');
+ const dc=t.closest('[data-dwgcopy]');if(dc){try{await navigator.clipboard.writeText(dc.dataset.path);toast('Path copied. Paste it into File Explorer or the SolidWorks/AutoCAD open box.',4000);}catch(er){toast('Could not copy the path.');}return;}
+ const dw=t.closest('[data-dwg]');if(dw&&isCad($('#dwl')._files[dw.dataset.dwg][0])){e.preventDefault();try{const f=await $('#dwl')._files[dw.dataset.dwg][1].getFile();const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();toast('Downloaded '+f.name+'. Open it from your Downloads folder.',5000);}catch(er){toast('Could not read that file: '+er.message,5000);}return;}
+ if(dw){e.preventDefault();const files=$('#dwl')._files;const w=window.open('','_blank');
   try{const f=await files[dw.dataset.dwg][1].getFile();const u=URL.createObjectURL(f);
    if(w){w.location.href=u;}else{const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';a.download=f.name;document.body.appendChild(a);a.click();a.remove();toast('Pop-ups are blocked for this page, so the drawing was downloaded instead. Allow pop-ups to open it in a new tab.',6000);}}
   catch(er){if(w)w.close();toast('Could not open that drawing: '+er.message,5000);}return;}
