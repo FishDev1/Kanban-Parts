@@ -273,8 +273,9 @@ async function backupNow(){const bd=await S.dir.getDirectoryHandle('Manual Backu
 /* ---------- guided folder setup ---------- */
 const KMAP={shared:'dir',photos:'photoDir',dwg:'dwgDir'};
 const KNAME={shared:['1','Kanban System folder','Holds kanban-data.json. Required.','sharedPath','sharedUnc'],photos:['2','Photos folder','Part photos named by drawing number (optional).','photosPath','photosUnc'],dwg:['3','Drawings folder','The folder that holds 1xxx … 8xxx (optional).','dwgPath','dwgUnc']};
+const BAKED=/*BAKED*/null/*END*/;
 function showGuide(){
- const c=S.data?cfg():{};
+ const c0=S.data?cfg():{};const c=Object.assign({},BAKED||{});for(const k in c0)if((c0[k]||'').toString().trim())c[k]=c0[k];
  const rows=Object.keys(KNAME).map(k=>{const [n,t,d,pk,uk]=KNAME[k];const on=S[KMAP[k]];const path=(c[pk]||'').trim();const unc=(c[uk]||'').trim();
   return '<tr><td style="vertical-align:top"><b>'+n+'. '+t+'</b><div class="muted">'+d+'</div>'+[['Drive',path],['UNC',unc]].filter(x=>x[1]).map(([lb,v])=>'<div style="margin-top:4px"><span class="muted">'+lb+':</span> <code style="word-break:break-all;background:#f3f4f6;padding:2px 6px;border-radius:4px">'+esc(v)+'</code> <button data-gcopy="'+k+'" data-path="'+esc(v)+'" style="padding:1px 8px">Copy</button></div>').join('')+'</td>'+
   '<td style="white-space:nowrap;text-align:right;vertical-align:top">'+(on?'<span style="color:#166534">✔ '+esc(on.name)+'</span><br><button data-gpick="'+k+'">Change</button>':
@@ -584,7 +585,7 @@ function renderAdmin(){
  '<div class="panel"><h2>Delete & archive</h2><p>'+tagged+' parts are tagged for delete. Deleting moves them to the archive below (they can be restored).</p><button class="dng" id="bDelTag"'+(tagged?'':' disabled')+'>Move '+tagged+' tagged parts to archive</button></div>'+
  '<div class="panel"><h2>Archive ('+del.length+')</h2>'+(del.length?'<table class="t">'+del.slice(0,200).map((d,i)=>'<tr><td>'+esc(title(d.part))+'</td><td>'+esc(d.part['Description']||'')+'</td><td>'+esc(d.part['Rack Location']||'')+'</td><td class="muted">'+esc(d.on)+' by '+esc(d.by)+'</td><td><button data-rest="'+d.part.id+'">Restore</button></td></tr>').join('')+'</table>':'<p class="muted">Nothing archived.</p>')+'</div>'+
  '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button> <button id="bRebuild">Rebuild thumbnails</button> <button id="bBuildAll">Build all thumbnails now</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
- '<div class="panel"><h2>Folder paths (shown in the setup guide)</h2><div class="fg">'+[['sharedPath','Kanban System folder'],['sharedUnc','Kanban System folder (UNC)'],['photosPath','Photos folder'],['photosUnc','Photos folder (UNC)'],['dwgPath','Drawings folder'],['dwgUnc','Drawings folder (UNC)']].map(([k,t])=>'<label class="w">'+t+'<input data-path="'+k+'" value="'+esc(c[k]||'')+'" placeholder="'+(k.endsWith('Unc')?'\\\\server\\share\\…':'N:\\…')+'"></label>').join('')+'</div><button class="pri" id="bSaveCfg2">Save paths</button></div>'+
+ '<div class="panel"><h2>Folder paths (shown in the setup guide)</h2><div class="fg">'+[['sharedPath','Kanban System folder'],['sharedUnc','Kanban System folder (UNC)'],['photosPath','Photos folder'],['photosUnc','Photos folder (UNC)'],['dwgPath','Drawings folder'],['dwgUnc','Drawings folder (UNC)']].map(([k,t])=>'<label class="w">'+t+'<input data-path="'+k+'" value="'+esc(c[k]||'')+'" placeholder="'+(k.endsWith('Unc')?'\\\\server\\share\\…':'N:\\…')+'"></label>').join('')+'</div><button class="pri" id="bSaveCfg2">Save paths</button> <button id="bExpInt">Export internal index.html</button><p class="muted">Downloads a copy of this page with the paths above built in, so the setup guide shows them before anyone connects a folder. Host it on the network drive or hand it out internally.</p></div>'+
  '<div class="panel"><h2>Paper colors by thickness</h2><textarea class="lst" id="lPaper" style="height:130px">'+esc(c.paper.map(x=>x.t+' = '+x.c).join('\n'))+'</textarea></div>'+
  '<div class="panel"><h2>Lists (one per line)</h2><div class="fg">'+['racks','materials'].map(k=>'<label>'+k+'<textarea class="lst" data-l="'+k+'">'+esc(c[k].join('\n'))+'</textarea></label>').join('')+lst.map(k=>'<label>'+esc(k)+'<textarea class="lst" data-ll="'+esc(k)+'">'+esc(c.lists[k].join('\n'))+'</textarea></label>').join('')+'</div><button class="pri" id="bSaveCfg">Save lists</button></div>';}
 
@@ -724,6 +725,13 @@ async function restore(id){
   if(disk.parts.some(x=>pkey(x)===pkey(p)))throw new Error('A part with the same Drawing + Variant + Rack already exists, so this one can\'t be restored.');
   delete p['Delete Tag'];disk.parts.push(p);disk.deleted.splice(i,1);});toast('Restored');renderAdmin();}
  catch(e){modal('Could not restore',esc(e.message));}}
+async function exportInternal(){
+ const o={};document.querySelectorAll('[data-path]').forEach(i=>{if(i.tagName==='INPUT'&&i.value.trim())o[i.dataset.path]=i.value.trim();});
+ let src;try{const r=await fetch(location.href.split('#')[0],{cache:'no-store'});if(!r.ok)throw 0;src=await r.text();}catch(e){return toast('Could not read this page\'s source. Open the site over https and try again.');}
+ const json=JSON.stringify(o).replace(/</g,'\\u003c');
+ const out=src.replace(/\/\*BAKED\*\/[\s\S]*?\/\*END\*\//,()=>'/*BAKED*/'+json+'/*END*/');
+ if(out===src&&!/\/\*BAKED\*\/\{/.test(src))return toast('Export failed: marker not found.');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out],{type:'text/html'}));a.download='index.html';document.body.appendChild(a);a.click();a.remove();toast('Internal index.html downloaded ('+Object.keys(o).length+' paths built in).');}
 async function saveCfg(){
  const lines=t=>t.split('\n').map(x=>x.trim()).filter(Boolean);
  try{await commit(disk=>{const c=disk.config;
@@ -813,6 +821,7 @@ document.addEventListener('click',async e=>{
  if(id==='bImp'){const r=await modal('Replace ALL data?','<p>This overwrites the shared data file with the JSON you choose. A backup is saved first.</p><input type="file" id="impf" accept=".json">',[{t:'Cancel',v:false},{t:'Replace',v:true,dng:true}]);
   if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.parts))throw 0;await backupNow();await commit(disk=>{Object.keys(disk).forEach(k=>delete disk[k]);Object.assign(disk,d);});toast('Imported');render();}catch(er){toast('Invalid JSON file');}return;}
  if(id==='bSaveCfg'||id==='bSaveCfg2')return saveCfg();
+ if(id==='bExpInt')return exportInternal();
 });
 document.addEventListener('input',e=>{const t=e.target;
  if(t.id==='q'){clearTimeout(S.qt);S.qt=setTimeout(()=>{S.q=t.value;S.shown=120;if(S.view==='sheet'){paintSheet(true);return;}S.view==='board'?renderBoard():drawGrid();if(S.view==='board'){const q=$('#q');q.focus();q.setSelectionRange(q.value.length,q.value.length);}},140);}});
