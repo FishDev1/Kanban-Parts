@@ -222,7 +222,7 @@ async function writeData(d){d.meta={updated:new Date().toISOString(),updatedBy:S
 async function loadData(first){
  try{S.dataFH=await S.dir.getFileHandle('kanban-data.json');}catch(e){S.dataFH=null;S.data=null;setSync('No data file','warn');return offerImport();}
  S.data=await readData();indexAll();setSync();
- if(first){dailyBackup();}}
+ if(first){dailyBackup();if(!localStorage.getItem('kb_guide_seen')){localStorage.setItem('kb_guide_seen','1');setTimeout(showGuide,400);}}}
 async function offerImport(){
  const r=await modal('No data file in this folder','<p>This folder has no <b>kanban-data.json</b>. Choose the starter file you were given and it will be copied in.</p><input type="file" id="impf" accept=".json">',[{t:'Cancel',v:false},{t:'Import',v:true,pri:true}]);
  if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return toast('No file chosen');
@@ -242,6 +242,18 @@ async function dailyBackup(){try{const bd=await S.dir.getDirectoryHandle('Backup
   const names=[];for await(const [n] of bd.entries())if(/^kanban-data_.*\.json$/.test(n))names.push(n);names.sort();
   while(names.length>30)await bd.removeEntry(names.shift());}catch(e){}}
 async function backupNow(){const bd=await S.dir.getDirectoryHandle('Manual Backups',{create:true});const n='kanban-data_'+today()+'_'+pad(new Date().getHours())+pad(new Date().getMinutes())+'.json';await writeText(bd,n,JSON.stringify(S.data));toast('Backup saved: Manual Backups/'+n);}
+
+/* ---------- guided folder setup ---------- */
+const KMAP={shared:'dir',photos:'photoDir',dwg:'dwgDir'};
+const KNAME={shared:['1','Kanban System folder','Holds kanban-data.json. Required.','sharedPath'],photos:['2','Photos folder','Part photos named by drawing number (optional).','photosPath'],dwg:['3','Drawings folder','The folder that holds 1xxx … 8xxx (optional).','dwgPath']};
+function showGuide(){
+ const c=S.data?cfg():{};
+ const rows=Object.keys(KNAME).map(k=>{const [n,t,d,pk]=KNAME[k];const on=S[KMAP[k]];const path=(c[pk]||'').trim();
+  return '<tr><td style="vertical-align:top"><b>'+n+'. '+t+'</b><div class="muted">'+d+'</div>'+(path?'<div style="margin-top:4px"><code style="word-break:break-all;background:#f3f4f6;padding:2px 6px;border-radius:4px">'+esc(path)+'</code></div>':'')+'</td>'+
+  '<td style="white-space:nowrap;text-align:right;vertical-align:top">'+(on?'<span style="color:#166534">✔ '+esc(on.name)+'</span><br><button data-gpick="'+k+'">Change</button>':
+  (path?'<button data-gcopy="'+k+'" data-path="'+esc(path)+'">Copy path</button> ':'')+'<button class="pri" data-gpick="'+k+'">Choose…</button>')+'</td></tr>';}).join('');
+ return modal('Connect folders','<p>Each computer approves its folders once. For each row: <b>Copy path</b>, press <b>Choose…</b>, click the address bar of the folder window, paste, press Enter, then click <b>Select Folder</b>.</p><table class="t">'+rows+'</table>'+
+  (S.needReconnect.length?'<p><button class="pri" id="gRecon">Reconnect saved folders</button></p>':'')+'<p class="muted">The page remembers these on this computer and browser. Photos you replace are saved to the shared folder\'s images folder.</p>',[{t:'Done',v:true,pri:true}]);}
 
 /* ---------- modal ---------- */
 function modal(t,html,btns=[{t:'OK',v:true,pri:true}]){return new Promise(res=>{
@@ -379,6 +391,7 @@ function renderAdmin(){
  '<div class="panel"><h2>Delete & archive</h2><p>'+tagged+' parts are tagged for delete. Deleting moves them to the archive below (they can be restored).</p><button class="dng" id="bDelTag"'+(tagged?'':' disabled')+'>Move '+tagged+' tagged parts to archive</button></div>'+
  '<div class="panel"><h2>Archive ('+del.length+')</h2>'+(del.length?'<table class="t">'+del.slice(0,200).map((d,i)=>'<tr><td>'+esc(title(d.part))+'</td><td>'+esc(d.part['Description']||'')+'</td><td>'+esc(d.part['Rack Location']||'')+'</td><td class="muted">'+esc(d.on)+' by '+esc(d.by)+'</td><td><button data-rest="'+d.part.id+'">Restore</button></td></tr>').join('')+'</table>':'<p class="muted">Nothing archived.</p>')+'</div>'+
  '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
+ '<div class="panel"><h2>Folder paths (shown in the setup guide)</h2><div class="fg">'+[['sharedPath','Kanban System folder'],['photosPath','Photos folder'],['dwgPath','Drawings folder']].map(([k,t])=>'<label class="w">'+t+'<input data-path="'+k+'" value="'+esc(c[k]||'')+'" placeholder="N:\\…"></label>').join('')+'</div><button class="pri" id="bSaveCfg2">Save paths</button></div>'+
  '<div class="panel"><h2>Paper colors by thickness</h2><textarea class="lst" id="lPaper" style="height:130px">'+esc(c.paper.map(x=>x.t+' = '+x.c).join('\n'))+'</textarea></div>'+
  '<div class="panel"><h2>Lists (one per line)</h2><div class="fg">'+['racks','materials'].map(k=>'<label>'+k+'<textarea class="lst" data-l="'+k+'">'+esc(c[k].join('\n'))+'</textarea></label>').join('')+lst.map(k=>'<label>'+esc(k)+'<textarea class="lst" data-ll="'+esc(k)+'">'+esc(c.lists[k].join('\n'))+'</textarea></label>').join('')+'</div><button class="pri" id="bSaveCfg">Save lists</button></div>';}
 
@@ -520,7 +533,7 @@ async function saveCfg(){
  const lines=t=>t.split('\n').map(x=>x.trim()).filter(Boolean);
  try{await commit(disk=>{const c=disk.config;
   c.paper=lines($('#lPaper').value).map(l=>{const [t,col]=l.split('=').map(x=>x.trim());return {t:t==='N/A'?'N/A':Number(t),c:col};}).filter(x=>x.c&&(x.t==='N/A'||!isNaN(x.t)));
-  $$('[data-l]').forEach(e=>c[e.dataset.l]=lines(e.value));$$('[data-ll]').forEach(e=>c.lists[e.dataset.ll]=lines(e.value));});toast('Lists saved');render();}
+  $$('[data-path]').forEach(e=>{if(e.value.trim())c[e.dataset.path]=e.value.trim();else delete c[e.dataset.path];});$$('[data-l]').forEach(e=>c[e.dataset.l]=lines(e.value));$$('[data-ll]').forEach(e=>c.lists[e.dataset.ll]=lines(e.value));});toast('Lists saved');render();}
  catch(e){modal('Error',esc(e.message));}}
 
 /* ---------- xlsx export (no libraries) ---------- */
@@ -558,11 +571,10 @@ document.addEventListener('click',async e=>{
  const tab=t.closest('#tabs button');if(tab){S.view=tab.dataset.v;S.shown=120;closeDrawer();return render();}
  if(id==='bPick'||id==='btnFolders'&&!S.dir)return pick('shared');
  if(id==='bRecon')return reconnectAll();
- if(id==='btnFolders'){
-  const rows=Object.keys(KINDS).map(k=>{const on=S[{shared:'dir',photos:'photoDir',dwg:'dwgDir'}[k]];return '<tr><td>'+KINDS[k]+'</td><td>'+(on?'<b style="color:#166534">'+esc(on.name)+'</b>':'<span class="muted">not connected</span>')+'</td><td><button data-pick="'+k+'">'+(on?'Change':'Connect')+'</button></td></tr>';}).join('');
-  const r=await modal('Folders','<table class="t">'+rows+'</table><p class="muted">Photos: the Parts photo folder (named by drawing number, e.g. 51264.jpg). Drawings: the folder holding 1xxx … 8xxx. Photos uploaded here are saved into the shared folder\'s images folder.</p>'+(S.needReconnect.length?'<button id="bRecon2" class="pri">Reconnect saved folders</button>':''),[{t:'Close',v:true}]);return;}
- if(id==='bRecon2'){document.querySelector('.ov')?.remove();return reconnectAll();}
- if(t.dataset.pick){document.querySelector('.ov')?.remove();return pick(t.dataset.pick);}
+ if(id==='btnFolders')return showGuide();
+ if(t.dataset.gpick){document.querySelector('.ov')?.remove();await pick(t.dataset.gpick);return showGuide();}
+ if(t.dataset.gcopy){try{await navigator.clipboard.writeText(t.dataset.path);toast('Path copied. Paste it into the folder window.');}catch(er){toast('Could not copy. Select the path and copy it.');}return;}
+ if(id==='gRecon'){document.querySelector('.ov')?.remove();await reconnectAll();return showGuide();}
  if(id==='btnUser'){S.user='';await needUser();return render();}
  if(id==='btnHelp')return modal('How it works',
   '<p><b>Parts</b>: search, filter, tick parts, then Add to print queue. Click a part for details, drawings and Edit.</p><p><b>Board</b>: drag parts between statuses.</p><p><b>Print queue</b>: print one paper color at a time. Double-sided, flip on long edge, 100% scale, no margins. Confirm the print to mark cards printed.</p><p><b>To Do</b>: quick counts of what needs attention.</p><p>Everything saves straight to the shared folder, and other people see changes within about 15 seconds. Add <code>#admin</code> to the web address for Admin tools (delete, restore, lists, export).</p>');
@@ -595,7 +607,7 @@ document.addEventListener('click',async e=>{
  if(id==='bJson')return download(new Blob([JSON.stringify(S.data)],{type:'application/json'}),'kanban-data_'+today()+'.json');
  if(id==='bImp'){const r=await modal('Replace ALL data?','<p>This overwrites the shared data file with the JSON you choose. A backup is saved first.</p><input type="file" id="impf" accept=".json">',[{t:'Cancel',v:false},{t:'Replace',v:true,dng:true}]);
   if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.parts))throw 0;await backupNow();await commit(disk=>{Object.keys(disk).forEach(k=>delete disk[k]);Object.assign(disk,d);});toast('Imported');render();}catch(er){toast('Invalid JSON file');}return;}
- if(id==='bSaveCfg')return saveCfg();
+ if(id==='bSaveCfg'||id==='bSaveCfg2')return saveCfg();
 });
 document.addEventListener('input',e=>{const t=e.target;
  if(t.id==='q'){clearTimeout(S.qt);S.qt=setTimeout(()=>{S.q=t.value;S.shown=120;S.view==='board'?renderBoard():drawGrid();if(S.view==='board'){const q=$('#q');q.focus();q.setSelectionRange(q.value.length,q.value.length);}},140);}});
