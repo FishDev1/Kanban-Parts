@@ -110,6 +110,7 @@ table.sh td[class*=c-]{border-left:5px solid var(--c)}
 table.sh td .cedit{width:100%;height:100%;border:0;border-radius:0;padding:0 2px;margin:0;font:inherit;background:#fff}
 #printRoot{display:none}
 .sheet{width:8.5in;height:10.97in;overflow:hidden;display:grid;grid-template-columns:3.76in 3.76in;grid-template-rows:5.02in 5.02in;column-gap:.16in;row-gap:.14in;justify-content:center;align-content:center;page-break-after:always;break-after:page;background:#fff}
+.sheet.back>*{position:relative;left:var(--bx,0);top:var(--by,0)}
 .cardp{box-sizing:border-box;border:1.5px solid #000;padding:.14in .16in .1in;display:flex;flex-direction:column;overflow:hidden;font-family:Calibri,Carlito,Arial,sans-serif;color:#000;font-size:9pt;position:relative}
 .cardp.red{border:5px solid #f00}
 .cardp .h{display:flex;justify-content:space-between;align-items:flex-start;font-size:8pt}
@@ -605,6 +606,7 @@ function renderAdmin(){
  '<div class="panel"><h2>Archive ('+del.length+')</h2>'+(del.length?'<table class="t">'+del.slice(0,200).map((d,i)=>'<tr><td>'+esc(title(d.part))+'</td><td>'+esc(d.part['Description']||'')+'</td><td>'+esc(d.part['Rack Location']||'')+'</td><td class="muted">'+esc(d.on)+' by '+esc(d.by)+'</td><td><button data-rest="'+d.part.id+'">Restore</button></td></tr>').join('')+'</table>':'<p class="muted">Nothing archived.</p>')+'</div>'+
  '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button> <button id="bRebuild">Rebuild thumbnails</button> <button id="bBuildAll">Build all thumbnails now</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
  '<div class="panel"><h2>Folder paths (shown in the setup guide)</h2><div class="fg">'+[['sharedPath','Kanban System folder'],['sharedUnc','Kanban System folder (UNC)'],['photosPath','Photos folder'],['photosUnc','Photos folder (UNC)'],['dwgPath','Drawings folder'],['dwgUnc','Drawings folder (UNC)']].map(([k,t])=>'<label class="w">'+t+'<input data-path="'+k+'" value="'+esc(c[k]||'')+'" placeholder="'+(k.endsWith('Unc')?'\\\\server\\share\\…':'N:\\…')+'"></label>').join('')+'</div><button class="pri" id="bSaveCfg2">Save paths</button> <button id="bExpInt">Export internal index.html</button><p class="muted">Downloads a copy of this page with the paths above built in, so the setup guide shows them before anyone connects a folder. Host it on the network drive or hand it out internally.</p></div>'+
+ '<div class="panel"><h2>Print alignment (back side)</h2><p class="muted">If backs print slightly off from the fronts when flipping on the long edge, shift the back side here. Inches: right and down are positive, left and up are negative. 1/16 in = 0.06. Changes apply to the next print for everyone.</p><div class="fg"><label>Shift right (in)<input type="number" step="0.01" id="bkX" value="'+(Number(c.backX)||0)+'"></label><label>Shift down (in)<input type="number" step="0.01" id="bkY" value="'+(Number(c.backY)||0)+'"></label></div><button class="pri" id="bSaveBk">Save alignment</button></div>'+
  '<div class="panel"><h2>Paper colors by thickness</h2><textarea class="lst" id="lPaper" style="height:130px">'+esc(c.paper.map(x=>x.t+' = '+x.c).join('\n'))+'</textarea></div>'+
  '<div class="panel"><h2>Lists (one per line)</h2><div class="fg">'+['racks','materials'].map(k=>'<label>'+k+'<textarea class="lst" data-l="'+k+'">'+esc(c[k].join('\n'))+'</textarea></label>').join('')+lst.map(k=>'<label>'+esc(k)+'<textarea class="lst" data-ll="'+esc(k)+'">'+esc(c.lists[k].join('\n'))+'</textarea></label>').join('')+'</div><button class="pri" id="bSaveCfg">Save lists</button></div>';}
 
@@ -729,8 +731,8 @@ async function printBundle(color){
  let html='';const E='<div></div>';
  for(let i=0;i<ps.length;i+=2){const A=ps[i],B=ps[i+1],u=p=>p?urls[fileKey(p)]:null;
   html+='<div class="sheet">'+cardFront(A,1)+cardFront(A,2)+(B?cardFront(B,1)+cardFront(B,2):E+E)+'</div>';
-  html+='<div class="sheet">'+cardBack(A,2,u(A))+cardBack(A,1,u(A))+(B?cardBack(B,2,u(B))+cardBack(B,1,u(B)):E+E)+'</div>';}
- const root=$('#printRoot');root.innerHTML=html;
+  html+='<div class="sheet back">'+cardBack(A,2,u(A))+cardBack(A,1,u(A))+(B?cardBack(B,2,u(B))+cardBack(B,1,u(B)):E+E)+'</div>';}
+ const root=$('#printRoot');root.innerHTML=html;root.style.setProperty('--bx',(Number(cfg().backX)||0)+'in');root.style.setProperty('--by',(Number(cfg().backY)||0)+'in');
  await Promise.all($$('img',root).map(i=>i.decode().catch(()=>{})));
  document.body.classList.add('printing');await sleep(150);window.print();document.body.classList.remove('printing');
  const r=await modal('Did the '+color+' bundle print?','<p>Yes marks these '+ps.length+' parts as <b>Card Printed - Not Placed</b>, stamps today\'s date, and removes them from the queue.</p>',[{t:'No, keep in queue',v:false},{t:'Yes, mark printed',v:true,pri:true}]);
@@ -846,6 +848,7 @@ document.addEventListener('click',async e=>{
   if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.parts))throw 0;await backupNow();await commit(disk=>{Object.keys(disk).forEach(k=>delete disk[k]);Object.assign(disk,d);});toast('Imported');render();}catch(er){toast('Invalid JSON file');}return;}
  if(id==='bSaveCfg'||id==='bSaveCfg2')return saveCfg();
  if(id==='bExpInt')return exportInternal();
+ if(id==='bSaveBk'){const x=Math.max(-0.5,Math.min(0.5,Number($('#bkX').value)||0)),y=Math.max(-0.5,Math.min(0.5,Number($('#bkY').value)||0));try{await commit(d=>{d.config.backX=x;d.config.backY=y;});toast('Alignment saved');}catch(er){modal('Error',esc(er.message));}return;}
 });
 document.addEventListener('input',e=>{const t=e.target;
  if(t.id==='q'){clearTimeout(S.qt);S.qt=setTimeout(()=>{S.q=t.value;S.shown=120;if(S.view==='sheet'){paintSheet(true);return;}S.view==='board'?renderBoard():drawGrid();if(S.view==='board'){const q=$('#q');q.focus();q.setSelectionRange(q.value.length,q.value.length);}},140);}});
