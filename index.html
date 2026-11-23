@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kanban Parts System</title>
+<style>
+:root{--bg:#f3f4f6;--ink:#111827;--mute:#6b7280;--line:#e5e7eb;--card:#fff;--acc:#2563eb;--dark:#1f2937;
+--pink:#f6a9c4;--yellow:#f5e060;--orange:#f4a259;--blue:#86bff0;--green:#8dd29b;--red:#e0554a;--unset:#c8ccd0}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button{font:inherit;cursor:pointer;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:6px 12px}
+button:hover{background:#f1f5f9}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}button.pri:hover{background:#1d4ed8}
+button.dng{color:#b91c1c;border-color:#fca5a5}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:100%}
+header{background:var(--dark);color:#fff;display:flex;align-items:center;gap:16px;padding:8px 16px;position:sticky;top:0;z-index:20;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:700;white-space:nowrap}
+nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+nav button{background:transparent;color:#d1d5db;border:0;border-radius:6px}
+nav button.on{background:#374151;color:#fff}
+nav .badge{background:var(--acc);color:#fff;border-radius:10px;padding:0 7px;font-size:12px;margin-left:4px}
+header .r{display:flex;gap:8px;align-items:center}
+header .r button{background:#374151;color:#fff;border-color:#4b5563}
+.pill{font-size:12px;padding:3px 10px;border-radius:12px;background:#4b5563}
+.pill.ok{background:#166534}.pill.bad{background:#991b1b}.pill.warn{background:#92400e}
+main{padding:16px;max-width:1500px;margin:0 auto}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar input[type=search]{flex:1;min-width:220px;font-size:16px;padding:9px 12px}
+.muted{color:var(--mute)}
+.sel-bar{background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.grid.list{grid-template-columns:1fr}
+.pc{background:var(--card);border:1px solid var(--line);border-left:7px solid var(--unset);border-radius:10px;overflow:hidden;cursor:pointer;position:relative;display:flex;flex-direction:column}
+.pc:hover{box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.pc.tag{opacity:.55}
+.pc .ph{height:140px;background:#eef0f3;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px}
+.pc .ph img{width:100%;height:100%;object-fit:contain;background:#fff}
+.pc .bd{padding:8px 10px}
+.pc .dw{font-size:18px;font-weight:700}
+.pc .dw small{font-size:12px;font-weight:600;color:#b45309;margin-left:4px}
+.pc .ds{color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc .mt{display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;font-size:12px}
+.pc .ck{position:absolute;top:6px;left:6px;width:20px;height:20px;z-index:2}
+.grid.list .pc{flex-direction:row;align-items:center}
+.grid.list .pc .ph{height:60px;width:90px;flex:none}
+.grid.list .pc .bd{flex:1;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#e5e7eb;color:#374151;white-space:nowrap}
+.st-Triage{background:#e5e7eb}.st-Needs{background:#fde68a;color:#78350f}.st-Ready{background:#bfdbfe;color:#1e3a8a}
+.st-Printed{background:#e9d5ff;color:#581c87}.st-InRack{background:#bbf7d0;color:#14532d}.st-Not{background:#f3f4f6;color:#6b7280}.st-New{background:#fed7aa;color:#7c2d12}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.3);vertical-align:-1px}
+.c-Pink{--c:var(--pink)}.c-Yellow{--c:var(--yellow)}.c-Orange{--c:var(--orange)}.c-Blue{--c:var(--blue)}.c-Green{--c:var(--green)}.c-Red{--c:var(--red)}.c-Unset{--c:var(--unset)}
+.pc[class*=c-]{border-left-color:var(--c)}.dot[class*=c-]{background:var(--c)}
+.board{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:12px}
+.col{background:#e5e7eb;border-radius:10px;min-width:250px;width:250px;flex:none;padding:8px;max-height:calc(100vh - 190px);overflow-y:auto}
+.col h3{margin:2px 4px 8px;font-size:13px;display:flex;justify-content:space-between}
+.col.over{outline:3px dashed var(--acc)}
+.bc{background:#fff;border-left:6px solid var(--unset);border-radius:6px;padding:6px 8px;margin-bottom:6px;cursor:grab;font-size:13px}
+.bc[class*=c-]{border-left-color:var(--c)}
+.bc b{font-size:15px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer}
+.tile .n{font-size:30px;font-weight:700}
+.tile:hover{box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.panel h2{margin:0 0 10px;font-size:16px}
+table.t{border-collapse:collapse;width:100%}
+table.t td,table.t th{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:middle}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,100vw);background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,.25);transform:translateX(105%);transition:transform .18s;z-index:40;display:flex;flex-direction:column}
+#drawer.open{transform:none}
+#drawer .dh{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+#drawer .db{padding:12px 16px;overflow-y:auto;flex:1}
+#drawer .big{width:100%;max-height:260px;object-fit:contain;background:#f3f4f6;border-radius:8px;margin-bottom:10px}
+.fg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 12px;margin-bottom:6px}
+.fg label{display:flex;flex-direction:column;font-size:12px;color:var(--mute)}
+.fg label.w{grid-column:1/-1}
+.fg input,.fg select,.fg textarea{color:var(--ink);font-size:14px}
+.fg input:disabled,.fg select:disabled,.fg textarea:disabled{background:#f9fafb;color:#111827;border-color:#eee}
+.ghd{font-weight:700;margin:14px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#374151}
+.rel a,.dw a{display:inline-block;margin:2px 6px 2px 0;color:var(--acc);cursor:pointer;text-decoration:underline}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 16px;border-radius:8px;z-index:100;display:none}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.mdl{background:#fff;border-radius:12px;padding:18px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+.mdl h3{margin:0 0 10px}.mdl .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.welcome{max-width:640px;margin:60px auto;text-align:center}
+.welcome button{font-size:16px;padding:12px 22px}
+textarea.lst{width:100%;height:150px}
+#printRoot{display:none}
+.sheet{width:8.5in;height:10.97in;overflow:hidden;display:grid;grid-template-columns:4.25in 4.25in;grid-template-rows:1fr 1fr;page-break-after:always;break-after:page;background:#fff}
+.cardp{margin:.18in;border:3px solid #000;padding:.1in .14in;display:flex;flex-direction:column;overflow:hidden;font-family:Arial,sans-serif;color:#000;font-size:11pt}
+.cardp.red{border-color:#d00}
+.cardp .h{display:flex;justify-content:space-between;font-weight:700;font-size:13pt;border-bottom:2px solid #000;padding-bottom:2px}
+.cardp .dwg{font-size:24pt;font-weight:800;line-height:1.1;margin-top:3px}
+.cardp .desc{font-size:12pt;margin-bottom:3px;max-height:2.6em;overflow:hidden}
+.cardp table{width:100%;border-collapse:collapse;font-size:10pt;margin:2px 0}
+.cardp td,.cardp th{border:1px solid #000;padding:1px 4px;height:.2in;text-align:left}
+.cardp th{background:#eee}
+.cardp .trig{display:flex;justify-content:space-between;font-weight:700;font-size:12pt;margin-top:3px}
+.cardp.red .trig .tv{color:#d00;font-size:15pt}
+.cardp .ft{display:flex;justify-content:space-between;font-size:9pt;margin-top:2px}
+.cardp .pho{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;margin:3px 0}
+.cardp .pho img{max-width:100%;max-height:100%;object-fit:contain}
+.cardp .mt{font-size:9pt;font-weight:700}
+@media print{
+ @page{size:letter portrait;margin:0}
+ body.printing>*:not(#printRoot){display:none!important}
+ body.printing #printRoot{display:block}
+ body.printing{background:#fff}
+}
+</style>
+</head>
+<body>
+<header>
+ <h1>Kanban Parts System</h1>
+ <nav id="tabs">
+  <button data-v="parts">Parts</button>
+  <button data-v="board">Board</button>
+  <button data-v="queue">Print queue<span class="badge" id="qn">0</span></button>
+  <button data-v="todo">To Do</button>
+  <button data-v="admin" id="tabAdmin" style="display:none">Admin</button>
+ </nav>
+ <div class="r">
+  <span class="pill" id="sync">Not connected</span>
+  <button id="btnFolders">Folders</button>
+  <button id="btnUser">Name</button>
+  <button id="btnHelp">?</button>
+ </div>
+</header>
+<main id="main"></main>
+<aside id="drawer"></aside>
+<div id="printRoot"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
+const nowStr=()=>{const d=new Date();return today()+' '+pad(d.getHours())+':'+pad(d.getMinutes());};
+const COLORS=['Pink','Yellow','Orange','Blue','Green','Red'];
+let toastT;function toast(m,ms=2600){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',ms);}
+
+/* ---------- state ---------- */
+const S={data:null,dir:null,imgDir:null,photoDir:null,dwgDir:null,dataFH:null,lastMod:0,
+ user:localStorage.getItem('kb_user')||'',view:'parts',q:'',f:{status:'',color:'',rack:'',route:'',flag:''},
+ shown:120,sel:new Set(),queue:new Set(JSON.parse(localStorage.getItem('kb_queue')||'[]')),
+ list:false,needReconnect:[],byId:new Map(),keys:new Map(),editing:null,edit:null,boardShown:{}};
+const saveQueue=()=>{localStorage.setItem('kb_queue',JSON.stringify([...S.queue]));$('#qn').textContent=S.queue.size;};
+
+/* ---------- field model ---------- */
+const GROUPS=[
+['Identity',[['Drawing','t'],['Variant / Finish','combo:@variants'],['Description','t'],['Secondary Description','t'],['Rack Location','combo:@racks'],['Card Status','sel:Card Status'],['Card Type','sel:Card Type'],['Contact','combo:Contact']]],
+['Reorder',[['Reorder Qty','n'],['Reorder Point','n'],['Red Reorder Point','n'],['2-Bin Reorder Point','n'],['Weekly Avg Demand','n'],['Parts Per Sheet','n'],['Preferred Qty Per Run','n'],['Volume Type','sel:Volume Type'],['2-Bin Candidate','yn'],['Kanban Needed (original)','yn']]],
+['Material & size',[['Material','combo:@materials'],['Thickness (in)','thick'],['Length (in)','n'],['Width (in)','n'],['Height (in)','n'],['Size / Dimensions','t'],['Material Profile','combo:Material Profile'],['Cosmetic','combo:Cosmetic'],['Bends','n'],['Benn PN','t'],['MC#','t'],['Bin Size Code','t']]],
+['Process',[['Process Route','t'],['Keep On','sel:Keep On'],['Migrated To Laser','combo:@migr'],['Kept At Kampco','yn'],['Needs Dash #','yn']]],
+['Tracking',[['Card Printed Date','d'],['Card Done/Shipped Date','d'],['Placed In Rack','d'],['Missing Info','t'],['Data Gaps','t'],['Notes','a'],['Comments','a']]],
+['System',[['Card ID','ro'],['File Key','t'],['Has Photo','ro'],['Original Entry','ro'],['Delete Tag','ro'],['Last Edited By','ro'],['Last Edited','ro']]]];
+const ALLK=GROUPS.flatMap(g=>g[1].map(f=>f[0]));
+const REQUIRED=['Drawing','Description','Rack Location','Thickness (in)','Process Route','Reorder Qty','Reorder Point'];
+const AUTO_ST=['','Setup - Needs Info','Setup - Ready to Print','New Part - Not Printed'];
+
+/* ---------- derived values ---------- */
+const cfg=()=>S.data.config;
+function fmtT(v){if(v===undefined||v===null||v==='')return '';if(v==='N/A')return 'N/A';const n=Number(v);if(isNaN(n))return String(v);const s=n.toFixed(3);return n<1?s.replace(/^0/,''):s;}
+function paperFor(v){if(v==='N/A')return 'Red';if(v===undefined||v===null||v==='')return 'Unset';const n=Number(v);const e=cfg().paper.find(x=>x.t!=='N/A'&&Math.abs(Number(x.t)-n)<0.0005);return e?e.c:'Unset';}
+function stCls(s){s=s||'';if(s.startsWith('Triage'))return 'st-Triage';if(s.includes('Needs Info'))return 'st-Needs';if(s.includes('Ready'))return 'st-Ready';if(s.startsWith('Card Printed'))return 'st-Printed';if(s==='In Rack')return 'st-InRack';if(s.startsWith('Not a'))return 'st-Not';return 'st-New';}
+const pkey=p=>[p['Drawing'],p['Variant / Finish'],p['Rack Location']].map(x=>String(x??'').trim().toLowerCase()).join('|');
+const title=p=>p['Drawing']+(p['Variant / Finish']?' '+p['Variant / Finish']:'');
+const base=d=>String(d||'').split('-')[0];
+function fileKey(p){return (p['File Key']||String(p['Drawing']||'').replace(/\(.*?\)/g,'').split('/')[0]).trim();}
+function indexAll(){S.byId.clear();S.keys.clear();
+ for(const p of S.data.parts){S.byId.set(p.id,p);
+  S.keys.set(p.id,[p['Drawing'],p['Variant / Finish'],p['Description'],p['Secondary Description'],p['Benn PN'],p['MC#'],p['Rack Location'],p['Material'],p['Size / Dimensions'],p['Notes'],p['Comments'],p['Process Route'],p['Card Status']].filter(x=>x!==undefined).join(' ').toLowerCase());}
+ for(const id of [...S.queue])if(!S.byId.has(id))S.queue.delete(id);
+ for(const id of [...S.sel])if(!S.byId.has(id))S.sel.delete(id);
+ saveQueue();}
+function listFor(name){
+ if(name==='@racks')return cfg().racks;
+ if(name==='@materials')return cfg().materials;
+ if(name==='@variants')return [...new Set(S.data.parts.map(p=>p['Variant / Finish']).filter(Boolean))].sort();
+ if(name==='@migr')return [...new Set(S.data.parts.map(p=>p['Migrated To Laser']).filter(Boolean))];
+ return cfg().lists[name]||[];}
+function isReady(p){return REQUIRED.every(k=>p[k]!==undefined&&p[k]!==''&&p[k]!==null);}
+
+/* ---------- IndexedDB (remember folder permissions) ---------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('kanban-parts',1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function hGet(k){try{const d=await idb();return await new Promise(res=>{const q=d.transaction('h').objectStore('h').get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(e){return null;}}
+async function hPut(k,v){try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction('h','readwrite');t.objectStore('h').put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}catch(e){}}
+
+/* ---------- connect to folders ---------- */
+const KINDS={shared:'Shared data folder (read/write)',photos:'Photos folder (read only, optional)',dwg:'Drawings root (read only, optional)'};
+async function perm(h,mode,ask){if(!h)return false;const o={mode};try{if((await h.queryPermission(o))==='granted')return true;if(ask&&(await h.requestPermission(o))==='granted')return true;}catch(e){}return false;}
+async function pick(kind){
+ if(!window.showDirectoryPicker){await modal('Browser not supported','<p>Open this page in Chrome or Edge.</p>');return;}
+ let h;try{h=await showDirectoryPicker({id:'kb-'+kind,mode:kind==='shared'?'readwrite':'read'});}catch(e){return;}
+ await hPut(kind,h);await attach(kind,h);}
+async function attach(kind,h){
+ if(kind==='shared'){S.dir=h;S.imgDir=await h.getDirectoryHandle('images',{create:true});await loadData(true);}
+ else if(kind==='photos')S.photoDir=h;else S.dwgDir=h;
+ S.dwgIdx=null;PH.clear();render();}
+async function autoConnect(){
+ S.needReconnect=[];
+ for(const k of Object.keys(KINDS)){const h=await hGet(k);if(!h)continue;
+  if(await perm(h,k==='shared'?'readwrite':'read',false))await attach(k,h);else S.needReconnect.push([k,h]);}
+ setSync();render();}
+async function reconnectAll(){
+ for(const [k,h] of S.needReconnect){if(await perm(h,k==='shared'?'readwrite':'read',true))await attach(k,h);}
+ S.needReconnect=S.needReconnect.filter(([k])=>!S[{shared:'dir',photos:'photoDir',dwg:'dwgDir'}[k]]);setSync();render();}
+function setSync(t,cls){const e=$('#sync');
+ if(!t){if(S.dir&&S.data){t='Synced · '+S.data.parts.length+' parts';cls='ok';}else if(S.needReconnect.length){t='Reconnect needed';cls='warn';}else{t='Not connected';cls='bad';}}
+ e.textContent=t;e.className='pill '+(cls||'');}
+
+/* ---------- data file ---------- */
+async function readData(){const f=await S.dataFH.getFile();const d=JSON.parse(await f.text());S.lastMod=f.lastModified;return d;}
+async function writeText(dir,name,text){const fh=await dir.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(text);await w.close();return fh;}
+async function writeData(d){d.meta={updated:new Date().toISOString(),updatedBy:S.user||'?'};
+ const w=await S.dataFH.createWritable();await w.write(JSON.stringify(d));await w.close();S.lastMod=(await S.dataFH.getFile()).lastModified;}
+async function loadData(first){
+ try{S.dataFH=await S.dir.getFileHandle('kanban-data.json');}catch(e){S.dataFH=null;S.data=null;setSync('No data file','warn');return offerImport();}
+ S.data=await readData();indexAll();setSync();
+ if(first){dailyBackup();}}
+async function offerImport(){
+ const r=await modal('No data file in this folder','<p>This folder has no <b>kanban-data.json</b>. Choose the starter file you were given and it will be copied in.</p><input type="file" id="impf" accept=".json">',[{t:'Cancel',v:false},{t:'Import',v:true,pri:true}]);
+ if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return toast('No file chosen');
+ try{const d=JSON.parse(await f.text());if(!Array.isArray(d.parts))throw 0;
+  S.dataFH=await S.dir.getFileHandle('kanban-data.json',{create:true});await writeData(d);S.data=d;indexAll();setSync();toast('Imported '+d.parts.length+' parts');render();}
+ catch(e){toast('That file is not a valid kanban-data.json');}}
+let chain=Promise.resolve();
+function commit(fn){const run=chain.then(async()=>{
+  if(!S.dataFH)throw new Error('Not connected');
+  const disk=await readData();const res=fn(disk);await writeData(disk);S.data=disk;indexAll();return res;});
+ chain=run.catch(()=>{});return run;}
+async function poll(){if(!S.dataFH||S.editing)return;try{const f=await S.dataFH.getFile();if(f.lastModified>S.lastMod){S.data=await readData();indexAll();render();toast('Updated: someone saved changes');}}catch(e){setSync('Connection lost','bad');}}
+setInterval(poll,15000);
+async function dailyBackup(){try{const bd=await S.dir.getDirectoryHandle('Backups',{create:true});const name='kanban-data_'+today()+'.json';
+  try{await bd.getFileHandle(name);return;}catch(e){}
+  await writeText(bd,name,JSON.stringify(S.data));
+  const names=[];for await(const [n] of bd.entries())if(/^kanban-data_.*\.json$/.test(n))names.push(n);names.sort();
+  while(names.length>30)await bd.removeEntry(names.shift());}catch(e){}}
+async function backupNow(){const bd=await S.dir.getDirectoryHandle('Manual Backups',{create:true});const n='kanban-data_'+today()+'_'+pad(new Date().getHours())+pad(new Date().getMinutes())+'.json';await writeText(bd,n,JSON.stringify(S.data));toast('Backup saved: Manual Backups/'+n);}
+
+/* ---------- modal ---------- */
+function modal(t,html,btns=[{t:'OK',v:true,pri:true}]){return new Promise(res=>{
+ const o=document.createElement('div');o.className='ov';
+ o.innerHTML='<div class="mdl"><h3>'+esc(t)+'</h3><div class="mb">'+html+'</div><div class="btns">'+btns.map((b,i)=>'<button data-i="'+i+'" class="'+(b.pri?'pri':'')+(b.dng?' dng':'')+'">'+esc(b.t)+'</button>').join('')+'</div></div>';
+ document.body.appendChild(o);const root=o.querySelector('.mb');
+ o.addEventListener('click',e=>{const b=e.target.closest('button[data-i]');if(!b)return;o.remove();res({v:btns[b.dataset.i].v,root});});
+ const f=o.querySelector('input,select,textarea');if(f)f.focus();});}
+async function needUser(){if(S.user)return true;
+ const r=await modal('Your name','<p>Used for the "Last Edited By" stamp.</p><input id="nm" style="width:100%" placeholder="First Last">',[{t:'Cancel',v:false},{t:'Save',v:true,pri:true}]);
+ const n=r.v&&$('#nm',r.root).value.trim();if(!n)return false;S.user=n;localStorage.setItem('kb_user',n);$('#btnUser').textContent=n;return true;}
+
+/* ---------- photos & drawings ---------- */
+const PH=new Map();let phActive=0;const phQ=[];
+async function findPhotoFile(key){for(const dir of [S.imgDir,S.photoDir]){if(!dir)continue;
+  for(const ext of ['jpg','jpeg','png','webp']){try{const fh=await dir.getFileHandle(key+'.'+ext);return await fh.getFile();}catch(e){}}}return null;}
+function photoFile(key){if(!PH.has(key))PH.set(key,findPhotoFile(key));return PH.get(key);}
+function runPh(){while(phActive<4&&phQ.length){const j=phQ.shift();phActive++;j().finally(()=>{phActive--;runPh();});}}
+function thumb(img){const key=img.dataset.key;phQ.push(async()=>{
+ const f=await photoFile(key);if(!f){img.parentNode.textContent='No photo';return;}
+ try{const bm=await createImageBitmap(f,{resizeWidth:360,resizeQuality:'low'});const c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d').drawImage(bm,0,0);
+  const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));img.src=URL.createObjectURL(b);bm.close();}
+ catch(e){img.src=URL.createObjectURL(f);}});runPh();}
+const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){io.unobserve(e.target);thumb(e.target);}},{rootMargin:'300px'});
+function watchThumbs(root){$$('img[data-key]',root).forEach(i=>io.observe(i));}
+async function fullURL(key){const f=await photoFile(key);return f?URL.createObjectURL(f):null;}
+async function dwgFiles(key){
+ if(!S.dwgDir||!key)return [];
+ if(!S.dwgIdx){S.dwgIdx=new Map();try{for await(const [n,h] of S.dwgDir.entries())if(h.kind==='directory')S.dwgIdx.set(n.toLowerCase(),{h,files:null});}catch(e){}}
+ const d=key[0];let ent=null;for(const [n,v] of S.dwgIdx)if(n.startsWith(d)&&n.endsWith('xxx'))ent=v;
+ if(!ent)return [];
+ if(!ent.files){ent.files=[];try{for await(const [n,h] of ent.h.entries())if(h.kind==='file'&&/\.(pdf|png|jpe?g)$/i.test(n))ent.files.push([n,h]);}catch(e){}}
+ const re=new RegExp('(^|[^0-9])'+key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([^0-9]|$)');
+ return ent.files.filter(([n])=>re.test(n));}
+
+/* ---------- filtering ---------- */
+function flagTest(f,p){switch(f){
+ case 'triage':return p['Card Status']==='Triage - Needs Decision';
+ case 'needsinfo':return p['Card Status']==='Setup - Needs Info';
+ case 'ready':return p['Card Status']==='Setup - Ready to Print';
+ case 'notplaced':return p['Card Status']==='Card Printed - Not Placed';
+ case 'tagged':return !!p['Delete Tag'];
+ case 'nophoto':return p['Has Photo']==='No';
+ case 'nothick':return p['Thickness (in)']===undefined||p['Thickness (in)']==='';
+ case 'norack':return !p['Rack Location'];
+ case 'inqueue':return S.queue.has(p.id);
+ default:return true;}}
+function visible(){const toks=S.q.toLowerCase().split(/\s+/).filter(Boolean);const f=S.f;
+ return S.data.parts.filter(p=>{
+  if(f.status&&(p['Card Status']||'')!==f.status)return false;
+  if(f.color&&paperFor(p['Thickness (in)'])!==f.color)return false;
+  if(f.rack&&p['Rack Location']!==f.rack)return false;
+  if(f.route&&!String(p['Process Route']||'').includes(f.route))return false;
+  if(f.flag&&!flagTest(f.flag,p))return false;
+  if(!f.flag||f.flag!=='tagged'){}
+  if(toks.length){const k=S.keys.get(p.id);for(const t of toks)if(!k.includes(t))return false;}
+  return true;});}
+
+/* ---------- rendering ---------- */
+function render(){
+ $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.view));
+ $('#btnUser').textContent=S.user||'Set name';$('#qn').textContent=S.queue.size;
+ const m=$('#main');
+ if(!S.dir||!S.data){m.innerHTML=welcome();return;}
+ if(S.view==='parts')renderParts();else if(S.view==='board')renderBoard();else if(S.view==='queue')renderQueue();else if(S.view==='todo')renderTodo();else renderAdmin();}
+function welcome(){const rc=S.needReconnect.length;return '<div class="welcome"><h2>Kanban Parts System</h2>'+
+ (rc?'<p>Your folders are remembered. Browsers ask for permission again each visit.</p><button class="pri" id="bRecon">Reconnect to shared folder</button>':
+ '<p>Choose the shared <b>Kanban System</b> folder on the network drive. All parts data and photos stay there. Works in Chrome or Edge.</p><button class="pri" id="bPick">Choose Shared Folder</button>')+'</div>';}
+
+function opts(arr,sel,blank){return (blank!==undefined?'<option value="">'+esc(blank)+'</option>':'')+arr.map(x=>'<option'+(x===sel?' selected':'')+'>'+esc(x)+'</option>').join('');}
+function renderParts(){
+ const racks=cfg().racks;const sts=cfg().lists['Card Status'];
+ const routes=[...new Set(S.data.parts.flatMap(p=>String(p['Process Route']||'').split('>').map(x=>x.trim()).filter(Boolean)))].sort();
+ $('#main').innerHTML=
+ '<div class="bar"><input type="search" id="q" placeholder="Search drawing, description, rack, material, Benn #, MC#…" value="'+esc(S.q)+'">'+
+ '<button class="pri" id="bNew">+ New Part</button><button id="bView">'+(S.list?'Grid':'List')+' view</button></div>'+
+ '<div class="bar"><select id="fStatus">'+opts(sts,S.f.status,'All statuses')+'</select>'+
+ '<select id="fColor">'+opts([...COLORS,'Unset'],S.f.color,'All paper colors')+'</select>'+
+ '<select id="fRack">'+opts(racks,S.f.rack,'All racks')+'</select>'+
+ '<select id="fRoute">'+opts(routes,S.f.route,'All processes')+'</select>'+
+ '<select id="fFlag"><option value="">No flag filter</option>'+[['inqueue','In print queue'],['tagged','Tagged for delete'],['nophoto','No photo'],['nothick','No thickness'],['norack','No rack']].map(([v,t])=>'<option value="'+v+'"'+(S.f.flag===v?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
+ '<button id="bClear">Clear</button><span class="muted" id="cnt"></span></div><div id="selbar"></div><div id="grid"></div><div id="more" style="text-align:center;margin:14px"></div>';
+ drawGrid();}
+function drawGrid(){
+ const v=visible();S.vis=v;const n=Math.min(S.shown,v.length);
+ $('#cnt').textContent=v.length+' of '+S.data.parts.length+' parts';
+ const g=$('#grid');g.className='grid'+(S.list?' list':'');
+ g.innerHTML=v.slice(0,n).map(card).join('')||'<p class="muted">No parts match.</p>';
+ $('#more').innerHTML=v.length>n?'<button id="bMore">Show '+Math.min(120,v.length-n)+' more ('+(v.length-n)+' left)</button>':'';
+ watchThumbs(g);selBar();}
+function card(p){const col=paperFor(p['Thickness (in)']);const st=p['Card Status']||'No status';
+ return '<div class="pc c-'+col+(p['Delete Tag']?' tag':'')+'" data-id="'+p.id+'"><input type="checkbox" class="ck" data-id="'+p.id+'"'+(S.sel.has(p.id)?' checked':'')+'>'+
+ '<div class="ph"><img data-key="'+esc(fileKey(p))+'" alt=""></div><div class="bd"><div class="dw">'+esc(p['Drawing'])+(p['Variant / Finish']?'<small>'+esc(p['Variant / Finish'])+'</small>':'')+'</div>'+
+ '<div class="ds">'+esc(p['Description']||p['Secondary Description']||'')+'</div>'+
+ '<div class="mt"><span class="chip '+stCls(st)+'">'+esc(st)+'</span><span><span class="dot c-'+col+'"></span> '+esc(fmtT(p['Thickness (in)'])||'no thk')+'</span><span>'+esc(p['Rack Location']||'no rack')+'</span>'+(S.queue.has(p.id)?'<span class="chip st-Ready">queued</span>':'')+(p['Delete Tag']?'<span class="chip" style="background:#fecaca">delete tag</span>':'')+'</div></div></div>';}
+function selBar(){const e=$('#selbar');if(!e)return;const n=S.sel.size;
+ const shown=S.vis?S.vis.length:0;
+ e.innerHTML=n?'<div class="sel-bar"><b>'+n+' selected</b><button data-a="queue">Add to print queue</button><button data-a="placed">Mark placed</button><button data-a="setst">Set status…</button><button data-a="tag">Tag for delete</button><button data-a="untag">Remove delete tag</button><button data-a="none">Clear selection</button></div>':
+ (shown&&shown<=400?'<div style="margin-bottom:8px"><button data-a="all">Select all '+shown+' shown</button> <button data-a="queueall">Add all '+shown+' shown to print queue</button></div>':'');}
+
+/* --- board --- */
+function renderBoard(){
+ const sts=[...cfg().lists['Card Status']];if(S.data.parts.some(p=>!p['Card Status']))sts.unshift('');
+ const v=visible();const by={};for(const s of sts)by[s]=[];for(const p of v){const s=p['Card Status']||'';(by[s]||(by[s]=[])).push(p);}
+ $('#main').innerHTML='<div class="bar"><input type="search" id="q" placeholder="Filter board…" value="'+esc(S.q)+'"><select id="fColor">'+opts([...COLORS,'Unset'],S.f.color,'All paper colors')+'</select><select id="fRack">'+opts(cfg().racks,S.f.rack,'All racks')+'</select><button id="bClear">Clear</button><span class="muted">Drag a card to another column to change its status.</span></div>'+
+ '<div class="board">'+sts.map(s=>{const arr=by[s]||[];const lim=S.boardShown[s]||50;
+ return '<div class="col" data-st="'+esc(s)+'"><h3><span>'+esc(s||'(no status)')+'</span><span class="muted">'+arr.length+'</span></h3>'+
+ arr.slice(0,lim).map(p=>'<div class="bc c-'+paperFor(p['Thickness (in)'])+'" draggable="true" data-id="'+p.id+'"><b>'+esc(title(p))+'</b><div>'+esc(p['Description']||'')+'</div><div class="muted">'+esc(p['Rack Location']||'no rack')+' · '+esc(fmtT(p['Thickness (in)'])||'no thk')+'</div></div>').join('')+
+ (arr.length>lim?'<button data-more="'+esc(s)+'" style="width:100%">Show more ('+(arr.length-lim)+')</button>':'')+'</div>';}).join('')+'</div>';}
+
+/* --- print queue --- */
+function renderQueue(){
+ const ps=[...S.queue].map(id=>S.byId.get(id)).filter(Boolean);const g={};
+ for(const p of ps)(g[paperFor(p['Thickness (in)'])]||(g[paperFor(p['Thickness (in)'])]=[])).push(p);
+ const order=[...COLORS,'Unset'];
+ $('#main').innerHTML='<div class="panel"><h2>Print queue</h2><p class="muted">Cards print in bundles by paper color. Each part prints 2 cards (front: black border, back: red border) on the same sheet, 4 parts per sheet. Print double-sided, <b>flip on long edge</b>, scale 100%, margins none.</p>'+
+ (ps.length?'<button class="dng" id="bQClear">Empty queue</button>':'<p>The queue is empty. On the Parts page, tick parts and choose "Add to print queue".</p>')+'</div>'+
+ order.filter(c=>g[c]).map(c=>{const arr=g[c].sort((a,b)=>String(a['Rack Location']).localeCompare(String(b['Rack Location']))||String(a['Drawing']).localeCompare(String(b['Drawing']),undefined,{numeric:true}));
+ const th=[...new Set(arr.map(p=>fmtT(p['Thickness (in)'])||'none'))].join(', ');
+ return '<div class="panel"><h2><span class="dot c-'+c+'"></span> '+c+' paper <span class="muted">· thickness '+esc(th)+' · '+arr.length+' parts · '+Math.ceil(arr.length/4)+' sheets</span></h2>'+
+ (c==='Unset'?'<p class="muted">These parts have no thickness, so the paper color is unknown. Open each one and set a thickness (or N/A for red).</p>':'<button class="pri" data-print="'+c+'">Print '+c+' bundle</button>')+
+ '<table class="t">'+arr.map(p=>'<tr><td><a href="#" data-open="'+p.id+'">'+esc(title(p))+'</a></td><td>'+esc(p['Description']||'')+'</td><td>'+esc(p['Rack Location']||'')+'</td><td>'+esc(fmtT(p['Thickness (in)']))+'</td><td><button data-unq="'+p.id+'">Remove</button></td></tr>').join('')+'</table></div>';}).join('');}
+
+/* --- to do --- */
+function renderTodo(){
+ const P=S.data.parts;const cnt=f=>P.filter(p=>flagTest(f,p)).length;
+ const T=[['ready','Ready to print','Setup is complete. Add them to the print queue.'],['notplaced','Printed, not placed','Cards printed but not yet in the rack.'],['needsinfo','Needs info','Missing a required field.'],['triage','Triage: needs decision','Keep as a kanban part or not?'],['nophoto','No photo','Photo missing.'],['nothick','No thickness','Paper color cannot be chosen.'],['norack','No rack','Needs a rack location.'],['tagged','Tagged for delete','Review, then delete in Admin.']];
+ $('#main').innerHTML='<div class="tiles">'+T.map(([f,t,d])=>'<div class="tile" data-flag="'+f+'"><div class="n">'+cnt(f)+'</div><b>'+t+'</b><div class="muted">'+d+'</div></div>').join('')+'</div>';}
+
+/* --- admin --- */
+function renderAdmin(){
+ const c=cfg();const del=S.data.deleted||[];const tagged=S.data.parts.filter(p=>p['Delete Tag']).length;
+ const lst=Object.keys(c.lists);
+ $('#main').innerHTML=
+ '<div class="panel"><h2>Delete & archive</h2><p>'+tagged+' parts are tagged for delete. Deleting moves them to the archive below (they can be restored).</p><button class="dng" id="bDelTag"'+(tagged?'':' disabled')+'>Move '+tagged+' tagged parts to archive</button></div>'+
+ '<div class="panel"><h2>Archive ('+del.length+')</h2>'+(del.length?'<table class="t">'+del.slice(0,200).map((d,i)=>'<tr><td>'+esc(title(d.part))+'</td><td>'+esc(d.part['Description']||'')+'</td><td>'+esc(d.part['Rack Location']||'')+'</td><td class="muted">'+esc(d.on)+' by '+esc(d.by)+'</td><td><button data-rest="'+d.part.id+'">Restore</button></td></tr>').join('')+'</table>':'<p class="muted">Nothing archived.</p>')+'</div>'+
+ '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
+ '<div class="panel"><h2>Paper colors by thickness</h2><textarea class="lst" id="lPaper" style="height:130px">'+esc(c.paper.map(x=>x.t+' = '+x.c).join('\n'))+'</textarea></div>'+
+ '<div class="panel"><h2>Lists (one per line)</h2><div class="fg">'+['racks','materials'].map(k=>'<label>'+k+'<textarea class="lst" data-l="'+k+'">'+esc(c[k].join('\n'))+'</textarea></label>').join('')+lst.map(k=>'<label>'+esc(k)+'<textarea class="lst" data-ll="'+esc(k)+'">'+esc(c.lists[k].join('\n'))+'</textarea></label>').join('')+'</div><button class="pri" id="bSaveCfg">Save lists</button></div>';}
+
+/* ---------- part drawer ---------- */
+const withCur=(arr,cur)=>(cur===''||cur===undefined||arr.includes(cur))?arr:arr.concat([cur]);
+function inputFor(f,p,editable,isNew){
+ const [k,t]=f;const v=p[k];const dv=(v===undefined||v===null)?'':v;const dis=(!editable||t==='ro'||(k==='Drawing'&&false))?' disabled':'';
+ const a=' data-k="'+esc(k)+'"';
+ let el;
+ if(t==='a')el='<textarea rows="2"'+a+dis+'>'+esc(dv)+'</textarea>';
+ else if(t==='yn')el='<select'+a+dis+'>'+opts(withCur(['Yes','No'],dv),dv,'')+'</select>';
+ else if(t==='thick'){const cur=dv===''?'':fmtT(dv);el='<select'+a+dis+'>'+opts(withCur(cfg().paper.map(x=>x.t==='N/A'?'N/A':fmtT(x.t)).concat(['1.000']),cur),cur,'')+'</select>';}
+ else if(t.startsWith('sel:'))el='<select'+a+dis+'>'+opts(withCur(listFor(t.slice(4)),dv),dv,'')+'</select>';
+ else if(t.startsWith('combo:')){const id='dl_'+k.replace(/\W/g,'');el='<input'+a+dis+' list="'+id+'" value="'+esc(dv)+'"><datalist id="'+id+'">'+listFor(t.slice(6)).map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist>';}
+ else if(t==='d')el='<input type="date"'+a+dis+' value="'+esc(dv)+'">';
+ else if(t==='n')el='<input type="text" inputmode="decimal"'+a+dis+' value="'+esc(dv)+'">';
+ else el='<input type="text"'+a+dis+' value="'+esc(dv)+'">';
+ const wide=(t==='a'||k==='Description'||k==='Secondary Description'||k==='Material'||k==='Process Route')?' w':'';
+ return '<label class="'+wide+'">'+esc(k)+el+'</label>';}
+async function openPart(id,opts2){
+ const p=opts2&&opts2.fresh?opts2.fresh:S.byId.get(id);if(!p)return;
+ const isNew=!!(opts2&&opts2.isNew);const edit=isNew||!!(opts2&&opts2.edit);
+ S.editing=edit?id:null;S.edit={id,base:JSON.parse(JSON.stringify(p)),isNew};
+ const fam=S.data.parts.filter(x=>x.id!==p.id&&base(x['Drawing'])===base(p['Drawing'])&&base(p['Drawing']));
+ const d=$('#drawer');
+ d.innerHTML='<div class="dh"><div style="flex:1"><div style="font-size:22px;font-weight:700">'+esc(isNew?'New part':title(p))+'</div><div class="muted">'+esc(p['Description']||'')+'</div></div>'+
+ (edit?'<button class="pri" id="dSave">Save</button><button id="dCancel">Cancel</button>':
+ '<button class="pri" id="dEdit">Edit</button><button id="dDup">Duplicate</button><button id="dQueue">'+(S.queue.has(p.id)?'In queue ✓':'Add to queue')+'</button><button id="dTag" class="dng">'+(p['Delete Tag']?'Remove delete tag':'Tag for delete')+'</button>')+
+ '<button id="dClose">✕</button></div><div class="db">'+
+ (isNew?'':'<img class="big" id="bigph" alt="" style="display:none"><div class="muted" id="phnote"></div>'+(edit?'<div style="margin:6px 0">Replace photo: <input type="file" id="phfile" accept="image/*"></div>':'')+'<div class="ghd">Drawings</div><div class="dw" id="dwl"><span class="muted">'+(S.dwgDir?'Looking…':'Connect the Drawings root under Folders to see drawing files.')+'</span></div>'+
+ (fam.length?'<div class="ghd">Related (same base number)</div><div class="rel">'+fam.map(x=>'<a data-open="'+x.id+'">'+esc(title(x))+(x['Rack Location']?' · '+esc(x['Rack Location']):'')+'</a>').join('')+'</div>':''))+
+ GROUPS.map(([g,fs])=>'<div class="ghd">'+g+'</div><div class="fg">'+fs.filter(f=>!(isNew&&g==='System')).map(f=>inputFor(f,p,edit,isNew)).join('')+'</div>').join('')+'</div>';
+ d.classList.add('open');
+ if(!isNew){const key=fileKey(p);fullURL(key).then(u=>{const im=$('#bigph');if(!im)return;if(u){im.src=u;im.style.display='block';}else $('#phnote').textContent='No photo found for '+key;});
+  dwgFiles(key).then(fs=>{const e=$('#dwl');if(!e||!S.dwgDir)return;e.innerHTML=fs.length?fs.map(([n,h],i)=>'<a data-dwg="'+i+'" data-key="'+esc(key)+'">'+esc(n)+'</a>').join(''):'<span class="muted">No PDF or PNG found for '+esc(key)+'</span>';e._files=fs;});}}
+function closeDrawer(){$('#drawer').classList.remove('open');S.editing=null;S.edit=null;}
+function collect(){const o={};$$('#drawer [data-k]').forEach(el=>{if(el.disabled)return;const k=el.dataset.k;let v=el.value.trim();
+ if(v===''){o[k]=undefined;return;}
+ const t=GROUPS.flatMap(g=>g[1]).find(f=>f[0]===k)[1];
+ if(t==='n'||t==='thick'){if(v==='N/A'){o[k]='N/A';return;}const n=Number(v);o[k]=isNaN(n)?v:n;return;}
+ o[k]=v;});return o;}
+const same=(a,b)=>JSON.stringify(a===undefined?null:a)===JSON.stringify(b===undefined?null:b);
+async function savePart(){
+ if(!await needUser())return;
+ const vals=collect();const {base:b0,isNew}=S.edit;
+ if(!vals['Drawing'])return toast('Drawing number is required');
+ const changes={};for(const k of Object.keys(vals))if(isNew||!same(vals[k],b0[k]))changes[k]=vals[k];
+ try{const res=await commit(disk=>{
+   let target;
+   if(isNew){target={id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),_rev:0};}
+   else{target=disk.parts.find(x=>x.id===b0.id);if(!target)throw new Error('This part was deleted by someone else.');
+    for(const k of Object.keys(changes))if(!same(target[k],b0[k]))throw new Error('Someone else just changed "'+k+'" on this part. Close it and reopen to see their change.');}
+   const cand={...target};for(const k of Object.keys(changes)){if(changes[k]===undefined)delete cand[k];else cand[k]=changes[k];}
+   if(!cand['File Key'])cand['File Key']=fileKey(cand);
+   cand['Card ID']=cand['Drawing']+(cand['Rack Location']?'|'+cand['Rack Location']:'');
+   const dup=disk.parts.find(x=>x.id!==cand.id&&pkey(x)===pkey(cand));
+   if(dup)throw new Error('Drawing '+title(cand)+' is already listed in rack '+(cand['Rack Location']||'(none)')+'. A part is unique by Drawing + Variant + Rack, so pick a different rack or variant.');
+   if(!(changes['Card Status']!==undefined&&!same(changes['Card Status'],b0['Card Status']))&&AUTO_ST.includes(cand['Card Status']||''))cand['Card Status']=isReady(cand)?'Setup - Ready to Print':'Setup - Needs Info';
+   cand._rev=(target._rev||0)+1;cand['Last Edited By']=S.user;cand['Last Edited']=nowStr();
+   if(isNew)disk.parts.push(cand);else Object.keys(target).forEach(k=>delete target[k]),Object.assign(target,cand);
+   return cand.id;});
+  const f=$('#phfile');if(f&&f.files[0])await savePhoto(res,fileKey(S.byId.get(res)),f.files[0]);
+  S.editing=null;toast('Saved');openPart(res);render();}
+ catch(e){await modal('Could not save',esc(e.message));}}
+async function savePhoto(id,key,file){
+ const bm=await createImageBitmap(file);const sc=Math.min(1,1600/Math.max(bm.width,bm.height));const c=document.createElement('canvas');c.width=Math.round(bm.width*sc);c.height=Math.round(bm.height*sc);
+ const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(bm,0,0,c.width,c.height);
+ const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.88));
+ for(const ext of ['png','jpeg','webp']){try{await S.imgDir.removeEntry(key+'.'+ext);}catch(e){}}
+ const fh=await S.imgDir.getFileHandle(key+'.jpg',{create:true});const w=await fh.createWritable();await w.write(b);await w.close();
+ PH.delete(key);await patch([id],{'Has Photo':'Yes'},true);}
+
+/* ---------- bulk operations ---------- */
+async function patch(ids,fields,silent){
+ if(!silent&&!await needUser())return;
+ await commit(disk=>{for(const id of ids){const p=disk.parts.find(x=>x.id===id);if(!p)continue;
+  for(const k of Object.keys(fields)){if(fields[k]===undefined)delete p[k];else p[k]=fields[k];}
+  p._rev=(p._rev||0)+1;p['Last Edited By']=S.user||'';p['Last Edited']=nowStr();}});}
+const stPatch=st=>({'Card Status':st,...(st==='Card Printed - Not Placed'?{'Card Printed Date':today()}:{}),...(st==='In Rack'?{'Placed In Rack':today()}:{})});
+async function bulk(a){
+ const ids=[...S.sel];
+ try{
+ if(a==='none'){S.sel.clear();}
+ else if(a==='all'){S.vis.forEach(p=>S.sel.add(p.id));}
+ else if(a==='queueall'){S.vis.forEach(p=>S.queue.add(p.id));saveQueue();toast(S.vis.length+' parts added to the print queue');}
+ else if(a==='queue'){ids.forEach(i=>S.queue.add(i));saveQueue();S.sel.clear();toast(ids.length+' added to the print queue');}
+ else if(a==='placed'){await patch(ids,stPatch('In Rack'));S.sel.clear();toast('Marked placed');}
+ else if(a==='tag'||a==='untag'){await patch(ids,{'Delete Tag':a==='tag'?today()+' - tagged by '+(S.user||'?'):undefined});S.sel.clear();}
+ else if(a==='setst'){const r=await modal('Set status for '+ids.length+' parts','<select id="ns" style="width:100%">'+opts(cfg().lists['Card Status'],'')+'</select>',[{t:'Cancel',v:false},{t:'Apply',v:true,pri:true}]);
+  if(!r.v)return;await patch(ids,stPatch($('#ns',r.root).value));S.sel.clear();}
+ }catch(e){await modal('Error',esc(e.message));}
+ renderParts();}
+
+/* ---------- card printing ---------- */
+function cardHTML(p,side,photoURL){
+ const route=String(p['Process Route']||'').split('>').map(x=>x.trim()).filter(x=>x&&x.toLowerCase()!=='no ops');
+ const rows=[0,1,2].map(i=>'<tr><td style="width:.25in">'+(i+1)+'</td><td>'+esc(route[i]||'')+'</td><td style="width:.8in"></td></tr>').join('');
+ const trig=side===2?(p['Red Reorder Point']??p['Reorder Point']??''):(p['Reorder Point']??'');
+ const d=new Date();const ds=pad(d.getMonth()+1)+'/'+pad(d.getDate())+'/'+String(d.getFullYear()).slice(2);
+ return '<div class="cardp'+(side===2?' red':'')+'"><div class="h"><span>TO: '+esc(p['Rack Location']||'')+'</span><span>'+esc(fmtT(p['Thickness (in)']))+'</span></div>'+
+ '<div class="dwg">DWG# '+esc(title(p))+'</div><div class="desc">'+esc(p['Description']||'')+(p['Secondary Description']?'<br><span style="font-size:9pt">'+esc(p['Secondary Description'])+'</span>':'')+'</div>'+
+ '<table><tr><th>#</th><th>Operation</th><th>Complete</th></tr>'+rows+'</table>'+
+ '<div class="ft"><span>Cosmetic? '+esc(p['Cosmetic']||'None')+'</span></div>'+
+ '<div class="trig"><span>Reorder Trigger:</span><span class="tv">'+esc(trig)+'</span></div><div class="trig"><span>Reorder Quantity:</span><span>'+esc(p['Reorder Qty']??'')+'</span></div>'+
+ '<div class="ft"><b>CARD: '+side+' of 2</b><span>Date: '+ds+'</span></div>'+
+ '<div class="pho">'+(photoURL?'<img src="'+photoURL+'">':'')+'</div>'+
+ '<div class="mt">METAL DESCRIP:</div><div style="font-size:9pt">'+esc(p['Material']||'')+'</div>'+
+ '<div class="ft"><span>BENN#: '+esc(p['Benn PN']||'')+'</span><span># PER SHEET: '+esc(p['Parts Per Sheet']??'')+'</span></div></div>';}
+async function printBundle(color){
+ const ps=[...S.queue].map(id=>S.byId.get(id)).filter(p=>p&&paperFor(p['Thickness (in)'])===color);
+ ps.sort((a,b)=>String(a['Rack Location']).localeCompare(String(b['Rack Location']))||String(a['Drawing']).localeCompare(String(b['Drawing']),undefined,{numeric:true}));
+ if(!ps.length)return;
+ const urls={};for(const p of ps){const k=fileKey(p);if(!(k in urls))urls[k]=await fullURL(k);}
+ let html='';
+ for(let i=0;i<ps.length;i+=4){const ch=ps.slice(i,i+4);
+  const slot=(arr,s)=>[0,1,2,3].map(j=>arr[j]?cardHTML(arr[j],s,urls[fileKey(arr[j])]):'<div></div>').join('');
+  html+='<div class="sheet">'+slot(ch,1)+'</div>';
+  const m=[ch[1],ch[0],ch[3],ch[2]];html+='<div class="sheet">'+slot(m,2)+'</div>';}
+ const root=$('#printRoot');root.innerHTML=html;
+ await Promise.all($$('img',root).map(i=>i.decode().catch(()=>{})));
+ document.body.classList.add('printing');await sleep(150);window.print();document.body.classList.remove('printing');
+ const r=await modal('Did the '+color+' bundle print?','<p>Yes marks these '+ps.length+' parts as <b>Card Printed - Not Placed</b>, stamps today\'s date, and removes them from the queue.</p>',[{t:'No, keep in queue',v:false},{t:'Yes, mark printed',v:true,pri:true}]);
+ if(r.v){try{await patch(ps.map(p=>p.id),stPatch('Card Printed - Not Placed'));ps.forEach(p=>S.queue.delete(p.id));saveQueue();toast('Marked printed');}catch(e){await modal('Error',esc(e.message));}}
+ root.innerHTML='';render();}
+
+/* ---------- admin actions ---------- */
+async function deleteTagged(){
+ const n=S.data.parts.filter(p=>p['Delete Tag']).length;
+ const r=await modal('Move '+n+' tagged parts to the archive?','<p>They are removed from the Parts list and kept in the archive, where they can be restored.</p>',[{t:'Cancel',v:false},{t:'Move to archive',v:true,dng:true}]);
+ if(!r.v||!await needUser())return;
+ await commit(disk=>{const keep=[],gone=[];for(const p of disk.parts)(p['Delete Tag']?gone:keep).push(p);disk.parts=keep;disk.deleted=(disk.deleted||[]).concat(gone.map(p=>({part:p,on:nowStr(),by:S.user})));});
+ toast('Archived');renderAdmin();}
+async function restore(id){
+ try{await commit(disk=>{const i=(disk.deleted||[]).findIndex(d=>d.part.id===id);if(i<0)throw new Error('Not in archive');const p=disk.deleted[i].part;
+  if(disk.parts.some(x=>pkey(x)===pkey(p)))throw new Error('A part with the same Drawing + Variant + Rack already exists, so this one can\'t be restored.');
+  delete p['Delete Tag'];disk.parts.push(p);disk.deleted.splice(i,1);});toast('Restored');renderAdmin();}
+ catch(e){modal('Could not restore',esc(e.message));}}
+async function saveCfg(){
+ const lines=t=>t.split('\n').map(x=>x.trim()).filter(Boolean);
+ try{await commit(disk=>{const c=disk.config;
+  c.paper=lines($('#lPaper').value).map(l=>{const [t,col]=l.split('=').map(x=>x.trim());return {t:t==='N/A'?'N/A':Number(t),c:col};}).filter(x=>x.c&&(x.t==='N/A'||!isNaN(x.t)));
+  $$('[data-l]').forEach(e=>c[e.dataset.l]=lines(e.value));$$('[data-ll]').forEach(e=>c.lists[e.dataset.ll]=lines(e.value));});toast('Lists saved');render();}
+ catch(e){modal('Error',esc(e.message));}}
+
+/* ---------- xlsx export (no libraries) ---------- */
+const CT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+const crc32=b=>{let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CT[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;};
+function zipStore(files){const en=new TextEncoder();const parts=[];const cen=[];let off=0;
+ for(const f of files){const nm=en.encode(f.name),d=en.encode(f.data),crc=crc32(d);
+  const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint32(14,crc,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,nm.length,true);
+  parts.push(new Uint8Array(h.buffer),nm,d);
+  const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+  cen.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+d.length;}
+ let cs=0;cen.forEach(x=>cs+=x.length);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+ return new Blob([...parts,...cen,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
+const colL=i=>{let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;};
+const xe=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'');
+function sheetXML(cols,rows){let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>';
+ const cell=(v,r,c)=>{if(v===undefined||v===null||v==='')return '';const ref=colL(c)+r;return typeof v==='number'?'<c r="'+ref+'"><v>'+v+'</v></c>':'<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xe(v)+'</t></is></c>';};
+ x+='<row r="1">'+cols.map((c,i)=>cell(c,1,i)).join('')+'</row>';
+ rows.forEach((r,ri)=>{x+='<row r="'+(ri+2)+'">'+cols.map((c,i)=>cell(r[c],ri+2,i)).join('')+'</row>';});
+ return x+'</sheetData></worksheet>';}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},2000);}
+function exportXlsx(){
+ const P=S.data.parts;const extra=[...new Set(P.flatMap(p=>Object.keys(p)))].filter(k=>!ALLK.includes(k)&&k!=='id'&&!k.startsWith('_'));
+ const cols=[...ALLK,...extra];const dl=(S.data.deleted||[]).map(d=>({...d.part,'Deleted On':d.on,'Deleted By':d.by}));
+ const files=[{name:'[Content_Types].xml',data:'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'},
+ {name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+ {name:'xl/workbook.xml',data:'<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Parts" sheetId="1" r:id="rId1"/><sheet name="Deleted" sheetId="2" r:id="rId2"/></sheets></workbook>'},
+ {name:'xl/_rels/workbook.xml.rels',data:'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>'},
+ {name:'xl/worksheets/sheet1.xml',data:sheetXML(cols,P)},{name:'xl/worksheets/sheet2.xml',data:sheetXML([...cols,'Deleted On','Deleted By'],dl)}];
+ download(zipStore(files),'Kanban_Parts_'+today()+'.xlsx');}
+
+/* ---------- events ---------- */
+document.addEventListener('click',async e=>{
+ const t=e.target;const id=t.id;
+ const tab=t.closest('#tabs button');if(tab){S.view=tab.dataset.v;S.shown=120;closeDrawer();return render();}
+ if(id==='bPick'||id==='btnFolders'&&!S.dir)return pick('shared');
+ if(id==='bRecon')return reconnectAll();
+ if(id==='btnFolders'){
+  const rows=Object.keys(KINDS).map(k=>{const on=S[{shared:'dir',photos:'photoDir',dwg:'dwgDir'}[k]];return '<tr><td>'+KINDS[k]+'</td><td>'+(on?'<b style="color:#166534">'+esc(on.name)+'</b>':'<span class="muted">not connected</span>')+'</td><td><button data-pick="'+k+'">'+(on?'Change':'Connect')+'</button></td></tr>';}).join('');
+  const r=await modal('Folders','<table class="t">'+rows+'</table><p class="muted">Photos: the Parts photo folder (named by drawing number, e.g. 51264.jpg). Drawings: the folder holding 1xxx … 8xxx. Photos uploaded here are saved into the shared folder\'s images folder.</p>'+(S.needReconnect.length?'<button id="bRecon2" class="pri">Reconnect saved folders</button>':''),[{t:'Close',v:true}]);return;}
+ if(id==='bRecon2'){document.querySelector('.ov')?.remove();return reconnectAll();}
+ if(t.dataset.pick){document.querySelector('.ov')?.remove();return pick(t.dataset.pick);}
+ if(id==='btnUser'){S.user='';await needUser();return render();}
+ if(id==='btnHelp')return modal('How it works',
+  '<p><b>Parts</b>: search, filter, tick parts, then Add to print queue. Click a part for details, drawings and Edit.</p><p><b>Board</b>: drag parts between statuses.</p><p><b>Print queue</b>: print one paper color at a time. Double-sided, flip on long edge, 100% scale, no margins. Confirm the print to mark cards printed.</p><p><b>To Do</b>: quick counts of what needs attention.</p><p>Everything saves straight to the shared folder, and other people see changes within about 15 seconds. Add <code>#admin</code> to the web address for Admin tools (delete, restore, lists, export).</p>');
+ if(id==='bNew'){if(!await needUser())return;const p={id:'new','Card Status':'Setup - Needs Info','Card Type':'Standard'};return openPart('new',{isNew:true,fresh:p});}
+ if(id==='bView'){S.list=!S.list;return renderParts();}
+ if(id==='bClear'){S.q='';S.f={status:'',color:'',rack:'',route:'',flag:''};return render();}
+ if(id==='bMore'){S.shown+=120;return drawGrid();}
+ if(t.dataset.more){S.boardShown[t.dataset.more]=(S.boardShown[t.dataset.more]||50)+100;return renderBoard();}
+ if(t.dataset.a&&t.closest('#selbar'))return bulk(t.dataset.a);
+ if(t.classList.contains('ck')){e.stopPropagation();t.checked?S.sel.add(t.dataset.id):S.sel.delete(t.dataset.id);return selBar();}
+ const op=t.closest('[data-open]');if(op){e.preventDefault();return openPart(op.dataset.open);}
+ const pc=t.closest('.pc');if(pc&&!t.classList.contains('ck'))return openPart(pc.dataset.id);
+ const bc=t.closest('.bc');if(bc)return openPart(bc.dataset.id);
+ const tl=t.closest('.tile');if(tl){S.f={status:'',color:'',rack:'',route:'',flag:tl.dataset.flag};S.q='';S.view='parts';S.shown=120;return render();}
+ if(t.dataset.print)return printBundle(t.dataset.print);
+ if(t.dataset.unq){S.queue.delete(t.dataset.unq);saveQueue();return renderQueue();}
+ if(id==='bQClear'){S.queue.clear();saveQueue();return renderQueue();}
+ if(id==='dClose'){return closeDrawer();}
+ if(id==='dEdit'){if(!await needUser())return;return openPart(S.edit.id,{edit:true});}
+ if(id==='dCancel'){const was=S.edit;closeDrawer();if(!was.isNew)openPart(was.id);return;}
+ if(id==='dSave')return savePart();
+ if(id==='dQueue'){S.queue.add(S.edit.id);saveQueue();toast('Added to queue');return openPart(S.edit.id);}
+ if(id==='dTag'){const p=S.byId.get(S.edit.id);try{await patch([p.id],{'Delete Tag':p['Delete Tag']?undefined:today()+' - tagged by '+(S.user||'?')});}catch(er){return modal('Error',esc(er.message));}render();return openPart(p.id);}
+ if(id==='dDup'){if(!await needUser())return;const p=JSON.parse(JSON.stringify(S.byId.get(S.edit.id)));const fresh={...p,id:'new'};['Rack Location','Card ID','Delete Tag','Card Printed Date','Placed In Rack','Card Done/Shipped Date','Last Edited','Last Edited By'].forEach(k=>delete fresh[k]);fresh['Card Status']='Setup - Needs Info';return openPart('new',{isNew:true,fresh});}
+ const dw=t.closest('[data-dwg]');if(dw){const files=$('#dwl')._files;const f=await files[dw.dataset.dwg][1].getFile();window.open(URL.createObjectURL(f),'_blank');return;}
+ if(id==='bDelTag')return deleteTagged();
+ if(t.dataset.rest)return restore(t.dataset.rest);
+ if(id==='bBackup')return backupNow();
+ if(id==='bXlsx')return exportXlsx();
+ if(id==='bJson')return download(new Blob([JSON.stringify(S.data)],{type:'application/json'}),'kanban-data_'+today()+'.json');
+ if(id==='bImp'){const r=await modal('Replace ALL data?','<p>This overwrites the shared data file with the JSON you choose. A backup is saved first.</p><input type="file" id="impf" accept=".json">',[{t:'Cancel',v:false},{t:'Replace',v:true,dng:true}]);
+  if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.parts))throw 0;await backupNow();await commit(disk=>{Object.keys(disk).forEach(k=>delete disk[k]);Object.assign(disk,d);});toast('Imported');render();}catch(er){toast('Invalid JSON file');}return;}
+ if(id==='bSaveCfg')return saveCfg();
+});
+document.addEventListener('input',e=>{const t=e.target;
+ if(t.id==='q'){clearTimeout(S.qt);S.qt=setTimeout(()=>{S.q=t.value;S.shown=120;S.view==='board'?renderBoard():drawGrid();if(S.view==='board'){const q=$('#q');q.focus();q.setSelectionRange(q.value.length,q.value.length);}},140);}});
+document.addEventListener('change',e=>{const t=e.target;const m={fStatus:'status',fColor:'color',fRack:'rack',fRoute:'route',fFlag:'flag'}[t.id];
+ if(m){S.f[m]=t.value;S.shown=120;S.view==='board'?renderBoard():drawGrid();}});
+document.addEventListener('dragstart',e=>{const b=e.target.closest&&e.target.closest('.bc');if(b){e.dataTransfer.setData('text/plain',b.dataset.id);e.dataTransfer.effectAllowed='move';}});
+document.addEventListener('dragover',e=>{const c=e.target.closest&&e.target.closest('.col');if(c){e.preventDefault();$$('.col.over').forEach(x=>x!==c&&x.classList.remove('over'));c.classList.add('over');}});
+document.addEventListener('drop',async e=>{const c=e.target.closest&&e.target.closest('.col');if(!c)return;e.preventDefault();c.classList.remove('over');
+ const id=e.dataTransfer.getData('text/plain');const p=S.byId.get(id);if(!p||(p['Card Status']||'')===c.dataset.st)return;
+ if(!await needUser())return;try{await patch([id],stPatch(c.dataset.st));}catch(er){await modal('Error',esc(er.message));}renderBoard();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.view&&$('#drawer').classList.contains('open')&&!document.querySelector('.ov'))closeDrawer();});
+function hashAdmin(){const on=/admin/i.test(location.hash+location.search);$('#tabAdmin').style.display=on?'':'none';if(!on&&S.view==='admin'){S.view='parts';render();}}
+window.addEventListener('hashchange',hashAdmin);
+hashAdmin();$('#btnUser').textContent=S.user||'Set name';saveQueue();render();
+if(window.showDirectoryPicker)autoConnect();else $('#main').innerHTML='<div class="welcome"><h2>Use Chrome or Edge</h2><p>This page needs the File System Access API to work with the shared network folder.</p></div>';
+</script>
+</body>
+</html>
