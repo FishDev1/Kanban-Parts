@@ -582,7 +582,7 @@ function renderQueue(){
  const ps=[...S.queue].map(id=>S.byId.get(id)).filter(Boolean);const g={};
  for(const p of ps)(g[paperFor(p['Thickness (in)'])]||(g[paperFor(p['Thickness (in)'])]=[])).push(p);
  const order=[...COLORS,'Unset'];
- $('#main').innerHTML='<div class="panel"><h2>Print queue</h2><p class="muted">Cards print in bundles by paper color. Each part prints one letter page like the original template: card 1 (black) on top, card 2 (red) below, with the material and photo card beside each. Single-sided, scale 100%, margins none.</p>'+
+ $('#main').innerHTML='<div class="panel"><h2>Print queue</h2><p class="muted">Cards print in bundles by paper color. Each part makes two cards, card 1 (black) and card 2 (red), each with its own material and photo back. Two parts per sheet, with backs on the reverse side, lined up with their fronts. Print double-sided, <b>flip on long edge</b>, scale 100%, margins none.</p>'+
  (ps.length?'<button class="dng" id="bQClear">Empty queue</button>':'<p>The queue is empty. On the Parts page, tick parts and choose "Add to print queue".</p>')+'</div>'+
  order.filter(c=>g[c]).map(c=>{const arr=g[c].sort((a,b)=>String(a['Rack Location']).localeCompare(String(b['Rack Location']))||String(a['Drawing']).localeCompare(String(b['Drawing']),undefined,{numeric:true}));
  const th=[...new Set(arr.map(p=>fmtT(p['Thickness (in)'])||'none'))].join(', ');
@@ -726,8 +726,10 @@ async function printBundle(color){
  ps.sort((a,b)=>String(a['Rack Location']).localeCompare(String(b['Rack Location']))||String(a['Drawing']).localeCompare(String(b['Drawing']),undefined,{numeric:true}));
  if(!ps.length)return;
  const urls={};for(const p of ps){const k=fileKey(p);if(!(k in urls))urls[k]=await fullURL(k);}
- let html='';
- for(const p of ps){const u=urls[fileKey(p)];html+='<div class="sheet">'+cardFront(p,1)+cardBack(p,1,u)+cardFront(p,2)+cardBack(p,2,u)+'</div>';}
+ let html='';const E='<div></div>';
+ for(let i=0;i<ps.length;i+=2){const A=ps[i],B=ps[i+1],u=p=>p?urls[fileKey(p)]:null;
+  html+='<div class="sheet">'+cardFront(A,1)+cardFront(A,2)+(B?cardFront(B,1)+cardFront(B,2):E+E)+'</div>';
+  html+='<div class="sheet">'+cardBack(A,2,u(A))+cardBack(A,1,u(A))+(B?cardBack(B,2,u(B))+cardBack(B,1,u(B)):E+E)+'</div>';}
  const root=$('#printRoot');root.innerHTML=html;
  await Promise.all($$('img',root).map(i=>i.decode().catch(()=>{})));
  document.body.classList.add('printing');await sleep(150);window.print();document.body.classList.remove('printing');
