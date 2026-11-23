@@ -220,22 +220,33 @@ async function tClear(){try{const d=await idb();await new Promise(res=>{const t=
 /* ---------- connect to folders ---------- */
 const KINDS={shared:'Shared data folder (read/write)',photos:'Photos folder (read only, optional)',dwg:'Drawings root (read only, optional)'};
 async function perm(h,mode,ask){if(!h)return false;const o={mode};try{if((await h.queryPermission(o))==='granted')return true;if(ask&&(await h.requestPermission(o))==='granted')return true;}catch(e){}return false;}
+const errTxt=e=>(e&&(e.name||'Error')+(e.message?': '+e.message:''))||'unknown error';
 async function pick(kind){
  if(!window.showDirectoryPicker){await modal('Browser not supported','<p>Open this page in Chrome or Edge.</p>');return;}
- let h;try{h=await showDirectoryPicker({startIn:'desktop',mode:kind==='shared'?'readwrite':'read'});}catch(e){return;}
- await hPut(kind,h);await attach(kind,h);}
+ toast('Opening the folder window… on a network drive this can take a few seconds.');
+ let h;try{h=await showDirectoryPicker({startIn:'desktop',mode:kind==='shared'?'readwrite':'read'});}
+ catch(e){if(e&&e.name==='AbortError')return;
+  try{h=await showDirectoryPicker({mode:kind==='shared'?'readwrite':'read'});}
+  catch(e2){if(e2&&e2.name==='AbortError')return;await modal('Folder window did not open','<p>The browser refused to open the folder window.</p><p class="muted">'+esc(errTxt(e2))+'</p><p>Try again. If it keeps happening, make sure the page is not inside a blocked pop-up or embedded frame, and that this site is allowed to see files in the browser\'s site settings.</p>');return;}}
+ try{await hPut(kind,h);await attach(kind,h);}catch(e){await modal('Could not use that folder','<p class="muted">'+esc(errTxt(e))+'</p><p>Check that you can open and write to it in Windows, then try again.</p>');}}
 async function attach(kind,h){
- if(kind==='shared'){S.dir=h;S.imgDir=await h.getDirectoryHandle('images',{create:true});try{S.thumbDir=await h.getDirectoryHandle('thumbs',{create:true});}catch(e){S.thumbDir=null;}await loadData(true);}
+ if(kind==='shared'){S.dir=h;const dp=h.getDirectoryHandle('images',{create:true}).then(x=>{S.imgDir=x;}),tp=h.getDirectoryHandle('thumbs',{create:true}).then(x=>{S.thumbDir=x;},()=>{S.thumbDir=null;});await Promise.all([dp,tp,loadData(true)]);}
  else if(kind==='photos')S.photoDir=h;else S.dwgDir=h;
  S.dwgIdx=null;S.idxP=null;PH.clear();render();}
 async function autoConnect(){
+ try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
  S.needReconnect=[];
- for(const k of Object.keys(KINDS)){const h=await hGet(k);if(!h)continue;
-  if(await perm(h,k==='shared'?'readwrite':'read',false))await attach(k,h);else S.needReconnect.push([k,h]);}
+ setSync('Connecting…','warn');
+ await Promise.all(Object.keys(KINDS).map(async k=>{const h=await hGet(k);if(!h)return;
+  if(await perm(h,k==='shared'?'readwrite':'read',false))await attach(k,h);else S.needReconnect.push([k,h]);}));
  setSync();render();}
 async function reconnectAll(){
- for(const [k,h] of S.needReconnect){if(await perm(h,k==='shared'?'readwrite':'read',true))await attach(k,h);}
- S.needReconnect=S.needReconnect.filter(([k])=>!S[{shared:'dir',photos:'photoDir',dwg:'dwgDir'}[k]]);setSync();render();}
+ /* request every permission inside this one click (before any await), otherwise the browser drops the click for the 2nd/3rd folder */
+ const rs=S.needReconnect.map(([k,h])=>{const o={mode:k==='shared'?'readwrite':'read'};let p;try{p=h.requestPermission(o);}catch(e){p=Promise.reject(e);}return p.then(r=>({k,h,r}),e=>({k,h,e}));});
+ const out=await Promise.all(rs);const bad=[];
+ for(const x of out){if(x.r==='granted'){try{await attach(x.k,x.h);}catch(e){bad.push(KNAME[x.k][1]+': '+errTxt(e));}}else bad.push(KNAME[x.k][1]+': '+(x.e?errTxt(x.e):'permission '+x.r));}
+ S.needReconnect=S.needReconnect.filter(([k])=>!S[{shared:'dir',photos:'photoDir',dwg:'dwgDir'}[k]]);setSync();render();
+ if(bad.length)await modal('Some folders did not reconnect','<p>'+bad.map(esc).join('<br>')+'</p><p>Press Reconnect again to retry. If it keeps failing, use <b>Choose</b> to pick the folder again (open Connect folders).</p>');}
 function setSync(t,cls){const e=$('#sync');
  if(!t){if(S.dir&&S.data){t='Synced · '+S.data.parts.length+' parts';cls='ok';}else if(S.needReconnect.length){t='Reconnect needed';cls='warn';}else{t='Not connected';cls='bad';}}
  e.textContent=t;e.className='pill '+(cls||'');}
@@ -383,7 +394,7 @@ function render(){
  if(!S.dir||!S.data){m.innerHTML=welcome();return;}
  if(S.view==='parts')renderParts();else if(S.view==='board')renderBoard();else if(S.view==='sheet')renderSheet();else if(S.view==='queue')renderQueue();else if(S.view==='todo')renderTodo();else renderAdmin();}
 function welcome(){const rc=S.needReconnect.length;return '<div class="welcome"><h2>Kanban Parts System</h2>'+
- (rc?'<p>Your folders are remembered. Browsers ask for permission again each visit.</p><button class="pri" id="bRecon">Reconnect to shared folder</button>':
+ (rc?'<p>Your folders are remembered. Browsers ask for permission again each visit.</p><button class="pri" id="bRecon">Reconnect to shared folder</button> <button id="bPick">Choose folder again</button><p class="muted">When the browser asks, choose <b>Allow on every visit</b> so it stops asking.</p>':
  '<p>Choose the shared <b>Kanban System</b> folder on the network drive. All parts data and photos stay there. Works in Chrome or Edge.</p><button class="pri" id="bPick">Choose Shared Folder</button>')+'</div>';}
 
 const thLabel=p=>{const t=p['Thickness (in)'];return (t===undefined||t===null||t==='')?'Unset':fmtT(t);};
