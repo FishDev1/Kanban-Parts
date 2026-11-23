@@ -109,21 +109,29 @@ table.sh td.ro{color:#6b7280}
 table.sh td[class*=c-]{border-left:5px solid var(--c)}
 table.sh td .cedit{width:100%;height:100%;border:0;border-radius:0;padding:0 2px;margin:0;font:inherit;background:#fff}
 #printRoot{display:none}
-.sheet{width:8.5in;height:10.97in;overflow:hidden;display:grid;grid-template-columns:4.25in 4.25in;grid-template-rows:1fr 1fr;page-break-after:always;break-after:page;background:#fff}
-.cardp{margin:.18in;border:3px solid #000;padding:.1in .14in;display:flex;flex-direction:column;overflow:hidden;font-family:Arial,sans-serif;color:#000;font-size:11pt}
-.cardp.red{border-color:#d00}
-.cardp .h{display:flex;justify-content:space-between;font-weight:700;font-size:13pt;border-bottom:2px solid #000;padding-bottom:2px}
-.cardp .dwg{font-size:24pt;font-weight:800;line-height:1.1;margin-top:3px}
-.cardp .desc{font-size:12pt;margin-bottom:3px;max-height:2.6em;overflow:hidden}
-.cardp table{width:100%;border-collapse:collapse;font-size:10pt;margin:2px 0}
-.cardp td,.cardp th{border:1px solid #000;padding:1px 4px;height:.2in;text-align:left}
-.cardp th{background:#eee}
-.cardp .trig{display:flex;justify-content:space-between;font-weight:700;font-size:12pt;margin-top:3px}
-.cardp.red .trig .tv{color:#d00;font-size:15pt}
-.cardp .ft{display:flex;justify-content:space-between;font-size:9pt;margin-top:2px}
-.cardp .pho{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;margin:3px 0}
+.sheet{width:8.5in;height:10.97in;overflow:hidden;display:grid;grid-template-columns:3.76in 3.76in;grid-template-rows:5.02in 5.02in;column-gap:.16in;row-gap:.14in;justify-content:center;align-content:center;page-break-after:always;break-after:page;background:#fff}
+.cardp{box-sizing:border-box;border:1.5px solid #000;padding:.14in .16in .1in;display:flex;flex-direction:column;overflow:hidden;font-family:Calibri,Carlito,Arial,sans-serif;color:#000;font-size:9pt;position:relative}
+.cardp.red{border:5px solid #f00}
+.cardp .h{display:flex;justify-content:space-between;align-items:flex-start;font-size:8pt}
+.cardp .h b{font-weight:700}
+.cardp .h .th{font-size:14pt;margin-right:.1in}
+.cardp .dwg{margin-top:.28in;font-size:8pt}.cardp .dwg b{font-size:14pt;font-weight:400;margin-left:2px}
+.cardp .nm{margin-top:.1in;font-size:8pt}.cardp .nm b{font-size:9pt}
+.cardp table{width:100%;border-collapse:collapse;font-size:8pt;margin-top:.28in}
+.cardp td,.cardp th{border:1px solid #000;padding:1px 4px;height:.24in;text-align:left;font-weight:400}
+.cardp td.r{text-align:right}
+.cardp .cos{margin:.22in 0 0 .1in;font-size:8.5pt}.cardp .cos b{font-size:9pt}
+.cardp .trig{margin:.1in 0 0 .1in;font-size:8.5pt}.cardp.red .trig b{color:#f00}
+.cardp .grow{flex:1}
+.cardp .ft{display:flex;justify-content:space-between;align-items:baseline;margin:0 .1in .02in .1in}
+.cardp .ft b{font-size:11pt}.cardp .ft span{font-size:8pt}
+.cardp .bin{position:absolute;right:.2in;top:3.1in;border:3px dashed #000;border-radius:10px;padding:2px 10px;font-size:15pt;font-weight:700}
+.cardp .mt{font-size:8pt;margin-top:.06in}
+.cardp .mv{font-size:11pt;font-weight:700;margin-top:.1in}
+.cardp .bn{display:flex;justify-content:space-between;font-size:8pt;margin-top:.2in}.cardp .bn b{font-size:9.5pt}
+.cardp .il{font-size:8pt;margin-top:.12in}
+.cardp .pho{flex:1;min-height:0;display:flex;align-items:flex-start;justify-content:center;margin-top:.1in}
 .cardp .pho img{max-width:100%;max-height:100%;object-fit:contain}
-.cardp .mt{font-size:9pt;font-weight:700}
 @media print{
  @page{size:letter portrait;margin:0}
  body.printing>*:not(#printRoot){display:none!important}
@@ -574,7 +582,7 @@ function renderQueue(){
  const ps=[...S.queue].map(id=>S.byId.get(id)).filter(Boolean);const g={};
  for(const p of ps)(g[paperFor(p['Thickness (in)'])]||(g[paperFor(p['Thickness (in)'])]=[])).push(p);
  const order=[...COLORS,'Unset'];
- $('#main').innerHTML='<div class="panel"><h2>Print queue</h2><p class="muted">Cards print in bundles by paper color. Each part prints 2 cards (front: black border, back: red border) on the same sheet, 4 parts per sheet. Print double-sided, <b>flip on long edge</b>, scale 100%, margins none.</p>'+
+ $('#main').innerHTML='<div class="panel"><h2>Print queue</h2><p class="muted">Cards print in bundles by paper color. Each part prints one letter page like the original template: card 1 (black) on top, card 2 (red) below, with the material and photo card beside each. Single-sided, scale 100%, margins none.</p>'+
  (ps.length?'<button class="dng" id="bQClear">Empty queue</button>':'<p>The queue is empty. On the Parts page, tick parts and choose "Add to print queue".</p>')+'</div>'+
  order.filter(c=>g[c]).map(c=>{const arr=g[c].sort((a,b)=>String(a['Rack Location']).localeCompare(String(b['Rack Location']))||String(a['Drawing']).localeCompare(String(b['Drawing']),undefined,{numeric:true}));
  const th=[...new Set(arr.map(p=>fmtT(p['Thickness (in)'])||'none'))].join(', ');
@@ -693,30 +701,33 @@ async function bulk(a){
  renderParts();}
 
 /* ---------- card printing ---------- */
-function cardHTML(p,side,photoURL){
- const route=String(p['Process Route']||'').split('>').map(x=>x.trim()).filter(x=>x&&x.toLowerCase()!=='no ops');
- const rows=[0,1,2].map(i=>'<tr><td style="width:.25in">'+(i+1)+'</td><td>'+esc(route[i]||'')+'</td><td style="width:.8in"></td></tr>').join('');
- const trig=side===2?(p['Red Reorder Point']??p['Reorder Point']??''):(p['Reorder Point']??'');
- const d=new Date();const ds=pad(d.getMonth()+1)+'/'+pad(d.getDate())+'/'+String(d.getFullYear()).slice(2);
- return '<div class="cardp'+(side===2?' red':'')+'"><div class="h"><span>TO: '+esc(p['Rack Location']||'')+'</span><span>'+esc(fmtT(p['Thickness (in)']))+'</span></div>'+
- '<div class="dwg">DWG# '+esc(title(p))+'</div><div class="desc">'+esc(p['Description']||'')+(p['Secondary Description']?'<br><span style="font-size:9pt">'+esc(p['Secondary Description'])+'</span>':'')+'</div>'+
+function cardFront(p,side){
+ const ops=String(p['Process Route']||'').split('>').map(x=>x.trim()).filter(x=>x&&x.toLowerCase()!=='no ops');
+ const q=Number(p['Reorder Qty']),pps=Number(p['Parts Per Sheet']);const sheets=(q>0&&pps>0)?Math.ceil(q/pps):0;
+ const rows=[0,1,2].map(i=>{const o=ops[i]||'';const sh=(/^laser/i.test(o)&&sheets)?sheets+' Sheet'+(sheets>1?'s':''):'';
+  return '<tr><td style="width:.28in">'+(i+1)+'</td><td>'+(sh?'<span style="display:flex;justify-content:space-between"><span>'+esc(o)+'</span><span>'+sh+'</span></span>':esc(o))+'</td><td style="width:1.1in"></td></tr>';}).join('');
+ const two=String(p['2-Bin Candidate']||'').toLowerCase()==='yes';
+ const t1=two&&p['2-Bin Reorder Point']!==undefined&&p['2-Bin Reorder Point']!==''?p['2-Bin Reorder Point']:(p['Reorder Point']??'');
+ const trig=side===2?(p['Red Reorder Point']??p['Reorder Point']??''):t1;
+ const d=new Date();const ds=(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2);
+ return '<div class="cardp'+(side===2?' red':'')+'"><div class="h"><span>To: <b>'+esc(p['Rack Location']||'')+'</b></span><span class="th">'+esc(fmtT(p['Thickness (in)']))+'</span></div>'+
+ '<div class="dwg">DWG#: <b>'+esc(title(p))+'</b></div><div class="nm">NAME: <b>'+esc(p['Description']||'')+'</b></div>'+
  '<table><tr><th>#</th><th>Operation</th><th>Complete</th></tr>'+rows+'</table>'+
- '<div class="ft"><span>Cosmetic? '+esc(p['Cosmetic']||'None')+'</span></div>'+
- '<div class="trig"><span>Reorder Trigger:</span><span class="tv">'+esc(trig)+'</span></div><div class="trig"><span>Reorder Quantity:</span><span>'+esc(p['Reorder Qty']??'')+'</span></div>'+
- '<div class="ft"><b>CARD: '+side+' of 2</b><span>Date: '+ds+'</span></div>'+
- '<div class="pho">'+(photoURL?'<img src="'+photoURL+'">':'')+'</div>'+
- '<div class="mt">METAL DESCRIP:</div><div style="font-size:9pt">'+esc(p['Material']||'')+'</div>'+
- '<div class="ft"><span>BENN#: '+esc(p['Benn PN']||'')+'</span><span># PER SHEET: '+esc(p['Parts Per Sheet']??'')+'</span></div></div>';}
+ (two?'<div class="bin">2 BIN</div>':'')+
+ '<div class="cos">Cosmetic? <b>'+esc(p['Cosmetic']||'None')+'</b></div>'+
+ '<div class="trig">Reorder Trigger: '+(side===2?'<b>':'')+esc(trig)+(side===2?'</b>':'')+'</div><div class="trig">Reorder Quantity: '+esc(p['Reorder Qty']??'')+'</div>'+
+ '<div class="grow"></div><div class="ft"><b>CARD: '+side+' of 2</b><span>Date: '+ds+'</span></div></div>';}
+function cardBack(p,side,photoURL){
+ return '<div class="cardp'+(side===2?' red':'')+'"><div class="mt">METAL DESCRIP:</div><div class="mv">'+esc(p['Material']||'')+'</div>'+
+ '<div class="bn"><span>BENN#: <b>'+esc(p['Benn PN']||'')+'</b></span><span># PER SHEET: '+esc(p['Parts Per Sheet']??'')+'</span></div>'+
+ '<div class="il">IMAGE:</div><div class="pho">'+(photoURL?'<img src="'+photoURL+'">':'')+'</div></div>';}
 async function printBundle(color){
  const ps=[...S.queue].map(id=>S.byId.get(id)).filter(p=>p&&paperFor(p['Thickness (in)'])===color);
  ps.sort((a,b)=>String(a['Rack Location']).localeCompare(String(b['Rack Location']))||String(a['Drawing']).localeCompare(String(b['Drawing']),undefined,{numeric:true}));
  if(!ps.length)return;
  const urls={};for(const p of ps){const k=fileKey(p);if(!(k in urls))urls[k]=await fullURL(k);}
  let html='';
- for(let i=0;i<ps.length;i+=4){const ch=ps.slice(i,i+4);
-  const slot=(arr,s)=>[0,1,2,3].map(j=>arr[j]?cardHTML(arr[j],s,urls[fileKey(arr[j])]):'<div></div>').join('');
-  html+='<div class="sheet">'+slot(ch,1)+'</div>';
-  const m=[ch[1],ch[0],ch[3],ch[2]];html+='<div class="sheet">'+slot(m,2)+'</div>';}
+ for(const p of ps){const u=urls[fileKey(p)];html+='<div class="sheet">'+cardFront(p,1)+cardBack(p,1,u)+cardFront(p,2)+cardBack(p,2,u)+'</div>';}
  const root=$('#printRoot');root.innerHTML=html;
  await Promise.all($$('img',root).map(i=>i.decode().catch(()=>{})));
  document.body.classList.add('printing');await sleep(150);window.print();document.body.classList.remove('printing');
