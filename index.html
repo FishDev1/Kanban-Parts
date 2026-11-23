@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kanban Parts System</title>
+<link rel="icon" href="data:,">
 <style>
 :root{--bg:#f3f4f6;--ink:#111827;--mute:#6b7280;--line:#e5e7eb;--card:#fff;--acc:#2563eb;--dark:#1f2937;
 --pink:#f6a9c4;--yellow:#f5e060;--orange:#f4a259;--blue:#86bff0;--green:#8dd29b;--red:#e0554a;--unset:#c8ccd0}
@@ -33,6 +34,8 @@ main{padding:16px;max-width:1500px;margin:0 auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
 .grid.list{grid-template-columns:1fr}
 .pc{background:var(--card);border:1px solid var(--line);border-left:7px solid var(--unset);border-radius:10px;overflow:hidden;cursor:pointer;position:relative;display:flex;flex-direction:column}
+.pc{content-visibility:auto;contain-intrinsic-size:auto 250px}
+.grid.list .pc{contain-intrinsic-size:auto 70px}
 .pc:hover{box-shadow:0 2px 10px rgba(0,0,0,.15)}
 .pc.tag{opacity:.55}
 .pc .ph{height:140px;background:#eef0f3;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px}
@@ -172,7 +175,7 @@ const pkey=p=>[p['Drawing'],p['Variant / Finish'],p['Rack Location']].map(x=>Str
 const title=p=>p['Drawing']+(p['Variant / Finish']?' '+p['Variant / Finish']:'');
 const base=d=>String(d||'').split('-')[0];
 function fileKey(p){return (p['File Key']||String(p['Drawing']||'').replace(/\(.*?\)/g,'').split('/')[0]).trim();}
-function indexAll(){S.byId.clear();S.keys.clear();
+function indexAll(){S.ver=(S.ver||0)+1;S.byId.clear();S.keys.clear();
  for(const p of S.data.parts){S.byId.set(p.id,p);
   S.keys.set(p.id,[p['Drawing'],p['Variant / Finish'],p['Description'],p['Secondary Description'],p['Benn PN'],p['MC#'],p['Rack Location'],p['Material'],p['Size / Dimensions'],p['Notes'],p['Comments'],p['Process Route'],p['Card Status']].filter(x=>x!==undefined).join(' ').toLowerCase());}
  for(const id of [...S.queue])if(!S.byId.has(id))S.queue.delete(id);
@@ -187,9 +190,12 @@ function listFor(name){
 function isReady(p){return REQUIRED.every(k=>p[k]!==undefined&&p[k]!==''&&p[k]!==null);}
 
 /* ---------- IndexedDB (remember folder permissions) ---------- */
-function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('kanban-parts',1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-async function hGet(k){try{const d=await idb();return await new Promise(res=>{const q=d.transaction('h').objectStore('h').get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(e){return null;}}
-async function hPut(k,v){try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction('h','readwrite');t.objectStore('h').put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}catch(e){}}
+function idb(){return new Promise((res,rej)=>{if(S.db)return res(S.db);const r=indexedDB.open('kanban-parts',2);
+ r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('h'))d.createObjectStore('h');if(!d.objectStoreNames.contains('t'))d.createObjectStore('t');};
+ r.onsuccess=()=>{S.db=r.result;res(S.db);};r.onerror=()=>rej(r.error);});}
+async function hGet(k,st='h'){try{const d=await idb();return await new Promise(res=>{const q=d.transaction(st).objectStore(st).get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(e){return null;}}
+async function hPut(k,v,st='h'){try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction(st,'readwrite');t.objectStore(st).put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}catch(e){}}
+async function tClear(){try{const d=await idb();await new Promise(res=>{const t=d.transaction('t','readwrite');t.objectStore('t').clear();t.oncomplete=res;t.onerror=res;});}catch(e){}}
 
 /* ---------- connect to folders ---------- */
 const KINDS={shared:'Shared data folder (read/write)',photos:'Photos folder (read only, optional)',dwg:'Drawings root (read only, optional)'};
@@ -199,9 +205,9 @@ async function pick(kind){
  let h;try{h=await showDirectoryPicker({id:'kb-'+kind,mode:kind==='shared'?'readwrite':'read'});}catch(e){return;}
  await hPut(kind,h);await attach(kind,h);}
 async function attach(kind,h){
- if(kind==='shared'){S.dir=h;S.imgDir=await h.getDirectoryHandle('images',{create:true});await loadData(true);}
+ if(kind==='shared'){S.dir=h;S.imgDir=await h.getDirectoryHandle('images',{create:true});try{S.thumbDir=await h.getDirectoryHandle('thumbs',{create:true});}catch(e){S.thumbDir=null;}await loadData(true);}
  else if(kind==='photos')S.photoDir=h;else S.dwgDir=h;
- S.dwgIdx=null;PH.clear();render();}
+ S.dwgIdx=null;S.idxP=null;PH.clear();render();}
 async function autoConnect(){
  S.needReconnect=[];
  for(const k of Object.keys(KINDS)){const h=await hGet(k);if(!h)continue;
@@ -222,7 +228,7 @@ async function writeData(d){d.meta={updated:new Date().toISOString(),updatedBy:S
 async function loadData(first){
  try{S.dataFH=await S.dir.getFileHandle('kanban-data.json');}catch(e){S.dataFH=null;S.data=null;setSync('No data file','warn');return offerImport();}
  S.data=await readData();indexAll();setSync();
- if(first){dailyBackup();if(!localStorage.getItem('kb_guide_seen')){localStorage.setItem('kb_guide_seen','1');setTimeout(showGuide,400);}}}
+ if(first){setTimeout(()=>{dailyBackup();if(S.imgDir)ensureIdx();},900);if(!localStorage.getItem('kb_guide_seen')){localStorage.setItem('kb_guide_seen','1');setTimeout(showGuide,400);}}}
 async function offerImport(){
  const r=await modal('No data file in this folder','<p>This folder has no <b>kanban-data.json</b>. Choose the starter file you were given and it will be copied in.</p><input type="file" id="impf" accept=".json">',[{t:'Cancel',v:false},{t:'Import',v:true,pri:true}]);
  if(!r.v)return;const f=$('#impf',r.root).files[0];if(!f)return toast('No file chosen');
@@ -234,8 +240,9 @@ function commit(fn){const run=chain.then(async()=>{
   if(!S.dataFH)throw new Error('Not connected');
   const disk=await readData();const res=fn(disk);await writeData(disk);S.data=disk;indexAll();return res;});
  chain=run.catch(()=>{});return run;}
-async function poll(){if(!S.dataFH||S.editing)return;try{const f=await S.dataFH.getFile();if(f.lastModified>S.lastMod){S.data=await readData();indexAll();render();toast('Updated: someone saved changes');}}catch(e){setSync('Connection lost','bad');}}
-setInterval(poll,15000);
+async function poll(){if(!S.dataFH||S.editing)return;try{const f=await S.dataFH.getFile();if(f.lastModified>S.lastMod){S.data=await readData();indexAll();S.idxP=null;PH.clear();render();toast('Updated: someone saved changes');}}catch(e){setSync('Connection lost','bad');}}
+setInterval(()=>{if(document.visibilityState==='visible')poll();},15000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')poll();});
 async function dailyBackup(){try{const bd=await S.dir.getDirectoryHandle('Backups',{create:true});const name='kanban-data_'+today()+'.json';
   try{await bd.getFileHandle(name);return;}catch(e){}
   await writeText(bd,name,JSON.stringify(S.data));
@@ -268,16 +275,28 @@ async function needUser(){if(S.user)return true;
 
 /* ---------- photos & drawings ---------- */
 const PH=new Map();let phActive=0;const phQ=[];
-async function findPhotoFile(key){for(const dir of [S.imgDir,S.photoDir]){if(!dir)continue;
-  for(const ext of ['jpg','jpeg','png','webp']){try{const fh=await dir.getFileHandle(key+'.'+ext);return await fh.getFile();}catch(e){}}}return null;}
+async function scan(dir){const m=new Map();if(!dir)return m;try{for await(const [n,h] of dir.entries()){if(h.kind!=='file')continue;const mm=n.match(/^(.+)\.(jpe?g|png|webp)$/i);if(mm){const k=mm[1].toLowerCase();if(!m.has(k)||/jpe?g/i.test(mm[2]))m.set(k,h);}}}catch(e){}return m;}
+function ensureIdx(){if(!S.idxP)S.idxP=Promise.all([scan(S.imgDir),scan(S.photoDir)]).then(([a,b])=>({a,b}));return S.idxP;}
+async function findPhotoFile(key){const {a,b}=await ensureIdx();const k=key.toLowerCase();const h=a.get(k)||b.get(k);if(!h)return null;try{return await h.getFile();}catch(e){return null;}}
 function photoFile(key){if(!PH.has(key))PH.set(key,findPhotoFile(key));return PH.get(key);}
-function runPh(){while(phActive<4&&phQ.length){const j=phQ.shift();phActive++;j().finally(()=>{phActive--;runPh();});}}
-function thumb(img){const key=img.dataset.key;phQ.push(async()=>{
- const f=await photoFile(key);if(!f){img.parentNode.textContent='No photo';return;}
- try{const bm=await createImageBitmap(f,{resizeWidth:360,resizeQuality:'low'});const c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d').drawImage(bm,0,0);
-  const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));img.src=URL.createObjectURL(b);bm.close();}
- catch(e){img.src=URL.createObjectURL(f);}});runPh();}
-const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){io.unobserve(e.target);thumb(e.target);}},{rootMargin:'300px'});
+function runPh(){while(phActive<6&&phQ.length){const j=phQ.shift();phActive++;j().catch(()=>{}).finally(()=>{phActive--;runPh();});}}
+const TH=new Map();
+const thumbVer=p=>((p['Photo Updated']||'')+'-'+(cfg().thumbEpoch||0)).replace(/\D/g,'')||'0';
+async function makeThumb(key,ver){
+ const ck=key+'~'+ver;
+ const hit=await hGet(ck,'t');if(hit)return URL.createObjectURL(hit);
+ if(S.thumbDir){try{const f=await (await S.thumbDir.getFileHandle(ck+'.jpg')).getFile();hPut(ck,f,'t');return URL.createObjectURL(f);}catch(e){}}
+ const f=await photoFile(key);if(!f)return null;
+ let blob;
+ try{const bm=await createImageBitmap(f,{resizeWidth:360,resizeQuality:'low'});const c=new OffscreenCanvas(bm.width,bm.height);c.getContext('2d').drawImage(bm,0,0);blob=await c.convertToBlob({type:'image/jpeg',quality:.78});bm.close();}
+ catch(e){return URL.createObjectURL(f);}
+ hPut(ck,blob,'t');
+ if(S.thumbDir){(async()=>{try{const fh=await S.thumbDir.getFileHandle(ck+'.jpg',{create:true});const w=await fh.createWritable();await w.write(blob);await w.close();}catch(e){}})();}
+ return URL.createObjectURL(blob);}
+function thumb(img){const key=img.dataset.key,ver=img.dataset.ver,ck=key+'~'+ver;phQ.push(async()=>{
+ let u=TH.get(ck);if(u===undefined){u=await makeThumb(key,ver);TH.set(ck,u);}
+ if(!img.isConnected)return;if(u)img.src=u;else if(img.parentNode)img.parentNode.textContent='No photo';});runPh();}
+const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){io.unobserve(e.target);thumb(e.target);}},{rootMargin:'600px'});
 function watchThumbs(root){$$('img[data-key]',root).forEach(i=>io.observe(i));}
 async function fullURL(key){const f=await photoFile(key);return f?URL.createObjectURL(f):null;}
 const isCad=n=>/\.(dwg|slddrw|sldprt|sldasm)$/i.test(n);
@@ -302,10 +321,11 @@ function flagTest(f,p){switch(f){
  case 'norack':return !p['Rack Location'];
  case 'inqueue':return S.queue.has(p.id);
  default:return true;}}
-function visible(){const toks=S.q.toLowerCase().split(/\s+/).filter(Boolean);const f=S.f;
+function visible(){const sig=S.ver+'|'+S.q+'|'+JSON.stringify(S.f)+(S.f.flag==='inqueue'?'|'+[...S.queue].join(','):'');if(S._vs===sig)return S._vv;const r=computeVisible();S._vs=sig;S._vv=r;return r;}
+function computeVisible(){const toks=S.q.toLowerCase().split(/\s+/).filter(Boolean);const f=S.f;
  return S.data.parts.filter(p=>{
   if(f.status&&(p['Card Status']||'')!==f.status)return false;
-  if(f.color&&paperFor(p['Thickness (in)'])!==f.color)return false;
+  if(f.color&&thLabel(p)!==f.color)return false;
   if(f.rack&&p['Rack Location']!==f.rack)return false;
   if(f.route&&!String(p['Process Route']||'').includes(f.route))return false;
   if(f.flag&&!flagTest(f.flag,p))return false;
@@ -324,6 +344,13 @@ function welcome(){const rc=S.needReconnect.length;return '<div class="welcome">
  (rc?'<p>Your folders are remembered. Browsers ask for permission again each visit.</p><button class="pri" id="bRecon">Reconnect to shared folder</button>':
  '<p>Choose the shared <b>Kanban System</b> folder on the network drive. All parts data and photos stay there. Works in Chrome or Edge.</p><button class="pri" id="bPick">Choose Shared Folder</button>')+'</div>';}
 
+const thLabel=p=>{const t=p['Thickness (in)'];return (t===undefined||t===null||t==='')?'Unset':fmtT(t);};
+function thickSel(sel){
+ const known=cfg().paper.filter(x=>x.t!=='N/A').sort((a,b)=>a.t-b.t).map(x=>[fmtT(x.t),fmtT(x.t)+'  ·  '+x.c]);
+ const have=new Set(known.map(x=>x[0]));have.add('N/A');have.add('Unset');
+ const extra=[...new Set(S.data.parts.map(thLabel))].filter(x=>!have.has(x)).sort().map(x=>[x,x+'  ·  no paper color set']);
+ const all=[...known,...extra,['N/A','N/A  ·  Red'],['Unset','No thickness set']];
+ return '<option value="">All thicknesses</option>'+all.map(([v,l])=>'<option value="'+esc(v)+'"'+(sel===v?' selected':'')+'>'+esc(l)+'</option>').join('');}
 function opts(arr,sel,blank){return (blank!==undefined?'<option value="">'+esc(blank)+'</option>':'')+arr.map(x=>'<option'+(x===sel?' selected':'')+'>'+esc(x)+'</option>').join('');}
 function renderParts(){
  const racks=cfg().racks;const sts=cfg().lists['Card Status'];
@@ -332,7 +359,7 @@ function renderParts(){
  '<div class="bar"><input type="search" id="q" placeholder="Search drawing, description, rack, material, Benn #, MC#…" value="'+esc(S.q)+'">'+
  '<button class="pri" id="bNew">+ New Part</button><button id="bView">'+(S.list?'Grid':'List')+' view</button></div>'+
  '<div class="bar"><select id="fStatus">'+opts(sts,S.f.status,'All statuses')+'</select>'+
- '<select id="fColor">'+opts([...COLORS,'Unset'],S.f.color,'All paper colors')+'</select>'+
+ '<select id="fColor">'+thickSel(S.f.color)+'</select>'+
  '<select id="fRack">'+opts(racks,S.f.rack,'All racks')+'</select>'+
  '<select id="fRoute">'+opts(routes,S.f.route,'All processes')+'</select>'+
  '<select id="fFlag"><option value="">No flag filter</option>'+[['inqueue','In print queue'],['tagged','Tagged for delete'],['nophoto','No photo'],['nothick','No thickness'],['norack','No rack']].map(([v,t])=>'<option value="'+v+'"'+(S.f.flag===v?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
@@ -347,7 +374,7 @@ function drawGrid(){
  watchThumbs(g);selBar();}
 function card(p){const col=paperFor(p['Thickness (in)']);const st=p['Card Status']||'No status';
  return '<div class="pc c-'+col+(p['Delete Tag']?' tag':'')+'" data-id="'+p.id+'"><input type="checkbox" class="ck" data-id="'+p.id+'"'+(S.sel.has(p.id)?' checked':'')+'>'+
- '<div class="ph"><img data-key="'+esc(fileKey(p))+'" alt=""></div><div class="bd"><div class="dw">'+esc(p['Drawing'])+(p['Variant / Finish']?'<small>'+esc(p['Variant / Finish'])+'</small>':'')+'</div>'+
+ '<div class="ph"><img data-key="'+esc(fileKey(p))+'" data-ver="'+thumbVer(p)+'" decoding="async" alt=""></div><div class="bd"><div class="dw">'+esc(p['Drawing'])+(p['Variant / Finish']?'<small>'+esc(p['Variant / Finish'])+'</small>':'')+'</div>'+
  '<div class="ds">'+esc(p['Description']||p['Secondary Description']||'')+'</div>'+
  '<div class="mt"><span class="chip '+stCls(st)+'">'+esc(st)+'</span><span><span class="dot c-'+col+'"></span> '+esc(fmtT(p['Thickness (in)'])||'no thk')+'</span><span>'+esc(p['Rack Location']||'no rack')+'</span>'+(S.queue.has(p.id)?'<span class="chip st-Ready">queued</span>':'')+(p['Delete Tag']?'<span class="chip" style="background:#fecaca">delete tag</span>':'')+'</div></div></div>';}
 function selBar(){const e=$('#selbar');if(!e)return;const n=S.sel.size;
@@ -359,7 +386,7 @@ function selBar(){const e=$('#selbar');if(!e)return;const n=S.sel.size;
 function renderBoard(){
  const sts=[...cfg().lists['Card Status']];if(S.data.parts.some(p=>!p['Card Status']))sts.unshift('');
  const v=visible();const by={};for(const s of sts)by[s]=[];for(const p of v){const s=p['Card Status']||'';(by[s]||(by[s]=[])).push(p);}
- $('#main').innerHTML='<div class="bar"><input type="search" id="q" placeholder="Filter board…" value="'+esc(S.q)+'"><select id="fColor">'+opts([...COLORS,'Unset'],S.f.color,'All paper colors')+'</select><select id="fRack">'+opts(cfg().racks,S.f.rack,'All racks')+'</select><button id="bClear">Clear</button><span class="muted">Drag a card to another column to change its status.</span></div>'+
+ $('#main').innerHTML='<div class="bar"><input type="search" id="q" placeholder="Filter board…" value="'+esc(S.q)+'"><select id="fColor">'+thickSel(S.f.color)+'</select><select id="fRack">'+opts(cfg().racks,S.f.rack,'All racks')+'</select><button id="bClear">Clear</button><span class="muted">Drag a card to another column to change its status.</span></div>'+
  '<div class="board">'+sts.map(s=>{const arr=by[s]||[];const lim=S.boardShown[s]||50;
  return '<div class="col" data-st="'+esc(s)+'"><h3><span>'+esc(s||'(no status)')+'</span><span class="muted">'+arr.length+'</span></h3>'+
  arr.slice(0,lim).map(p=>'<div class="bc c-'+paperFor(p['Thickness (in)'])+'" draggable="true" data-id="'+p.id+'"><b>'+esc(title(p))+'</b><div>'+esc(p['Description']||'')+'</div><div class="muted">'+esc(p['Rack Location']||'no rack')+' · '+esc(fmtT(p['Thickness (in)'])||'no thk')+'</div></div>').join('')+
@@ -391,7 +418,7 @@ function renderAdmin(){
  $('#main').innerHTML=
  '<div class="panel"><h2>Delete & archive</h2><p>'+tagged+' parts are tagged for delete. Deleting moves them to the archive below (they can be restored).</p><button class="dng" id="bDelTag"'+(tagged?'':' disabled')+'>Move '+tagged+' tagged parts to archive</button></div>'+
  '<div class="panel"><h2>Archive ('+del.length+')</h2>'+(del.length?'<table class="t">'+del.slice(0,200).map((d,i)=>'<tr><td>'+esc(title(d.part))+'</td><td>'+esc(d.part['Description']||'')+'</td><td>'+esc(d.part['Rack Location']||'')+'</td><td class="muted">'+esc(d.on)+' by '+esc(d.by)+'</td><td><button data-rest="'+d.part.id+'">Restore</button></td></tr>').join('')+'</table>':'<p class="muted">Nothing archived.</p>')+'</div>'+
- '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
+ '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button> <button id="bRebuild">Rebuild thumbnails</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
  '<div class="panel"><h2>Folder paths (shown in the setup guide)</h2><div class="fg">'+[['sharedPath','Kanban System folder'],['sharedUnc','Kanban System folder (UNC)'],['photosPath','Photos folder'],['photosUnc','Photos folder (UNC)'],['dwgPath','Drawings folder'],['dwgUnc','Drawings folder (UNC)']].map(([k,t])=>'<label class="w">'+t+'<input data-path="'+k+'" value="'+esc(c[k]||'')+'" placeholder="'+(k.endsWith('Unc')?'\\\\server\\share\\…':'N:\\…')+'"></label>').join('')+'</div><button class="pri" id="bSaveCfg2">Save paths</button></div>'+
  '<div class="panel"><h2>Paper colors by thickness</h2><textarea class="lst" id="lPaper" style="height:130px">'+esc(c.paper.map(x=>x.t+' = '+x.c).join('\n'))+'</textarea></div>'+
  '<div class="panel"><h2>Lists (one per line)</h2><div class="fg">'+['racks','materials'].map(k=>'<label>'+k+'<textarea class="lst" data-l="'+k+'">'+esc(c[k].join('\n'))+'</textarea></label>').join('')+lst.map(k=>'<label>'+esc(k)+'<textarea class="lst" data-ll="'+esc(k)+'">'+esc(c.lists[k].join('\n'))+'</textarea></label>').join('')+'</div><button class="pri" id="bSaveCfg">Save lists</button></div>';}
@@ -464,7 +491,7 @@ async function savePhoto(id,key,file){
  const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.88));
  for(const ext of ['png','jpeg','webp']){try{await S.imgDir.removeEntry(key+'.'+ext);}catch(e){}}
  const fh=await S.imgDir.getFileHandle(key+'.jpg',{create:true});const w=await fh.createWritable();await w.write(b);await w.close();
- PH.delete(key);await patch([id],{'Has Photo':'Yes'},true);}
+ PH.delete(key);S.idxP=null;await patch([id],{'Has Photo':'Yes','Photo Updated':nowStr()},true);}
 
 /* ---------- bulk operations ---------- */
 async function patch(ids,fields,silent){
@@ -609,6 +636,7 @@ document.addEventListener('click',async e=>{
   catch(er){if(w)w.close();toast('Could not open that drawing: '+er.message,5000);}return;}
  if(id==='bDelTag')return deleteTagged();
  if(t.dataset.rest)return restore(t.dataset.rest);
+ if(id==='bRebuild'){try{await commit(d=>{d.config.thumbEpoch=(d.config.thumbEpoch||0)+1;});if(S.thumbDir){const names=[];for await(const [n] of S.thumbDir.entries())names.push(n);for(const n of names)try{await S.thumbDir.removeEntry(n);}catch(er){}}await tClear();TH.clear();S.idxP=null;PH.clear();toast('Thumbnails will be rebuilt as you scroll');}catch(er){toast('Could not rebuild: '+er.message,5000);}return;}
  if(id==='bBackup')return backupNow();
  if(id==='bXlsx')return exportXlsx();
  if(id==='bJson')return download(new Blob([JSON.stringify(S.data)],{type:'application/json'}),'kanban-data_'+today()+'.json');
