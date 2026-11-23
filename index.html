@@ -40,6 +40,10 @@ main{padding:16px;max-width:1500px;margin:0 auto}
 .pc.tag{opacity:.55}
 .pc .ph{height:140px;background:#eef0f3;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px}
 .pc .ph img{width:100%;height:100%;object-fit:contain;background:#fff}
+.pc .ph{position:relative}
+.pc .ph.ld::before{content:'Loading…';position:absolute}
+.pc .ph.ld img{opacity:0}
+.pc .ph.ld img[src]{opacity:1}
 .pc .bd{padding:8px 10px}
 .pc .dw{font-size:18px;font-weight:700}
 .pc .dw small{font-size:12px;font-weight:600;color:#b45309;margin-left:4px}
@@ -218,7 +222,7 @@ const KINDS={shared:'Shared data folder (read/write)',photos:'Photos folder (rea
 async function perm(h,mode,ask){if(!h)return false;const o={mode};try{if((await h.queryPermission(o))==='granted')return true;if(ask&&(await h.requestPermission(o))==='granted')return true;}catch(e){}return false;}
 async function pick(kind){
  if(!window.showDirectoryPicker){await modal('Browser not supported','<p>Open this page in Chrome or Edge.</p>');return;}
- let h;try{h=await showDirectoryPicker({id:'kb-'+kind,mode:kind==='shared'?'readwrite':'read'});}catch(e){return;}
+ let h;try{h=await showDirectoryPicker({startIn:'desktop',mode:kind==='shared'?'readwrite':'read'});}catch(e){return;}
  await hPut(kind,h);await attach(kind,h);}
 async function attach(kind,h){
  if(kind==='shared'){S.dir=h;S.imgDir=await h.getDirectoryHandle('images',{create:true});try{S.thumbDir=await h.getDirectoryHandle('thumbs',{create:true});}catch(e){S.thumbDir=null;}await loadData(true);}
@@ -275,7 +279,7 @@ function showGuide(){
   return '<tr><td style="vertical-align:top"><b>'+n+'. '+t+'</b><div class="muted">'+d+'</div>'+[['Drive',path],['UNC',unc]].filter(x=>x[1]).map(([lb,v])=>'<div style="margin-top:4px"><span class="muted">'+lb+':</span> <code style="word-break:break-all;background:#f3f4f6;padding:2px 6px;border-radius:4px">'+esc(v)+'</code> <button data-gcopy="'+k+'" data-path="'+esc(v)+'" style="padding:1px 8px">Copy</button></div>').join('')+'</td>'+
   '<td style="white-space:nowrap;text-align:right;vertical-align:top">'+(on?'<span style="color:#166534">✔ '+esc(on.name)+'</span><br><button data-gpick="'+k+'">Change</button>':
   '<button class="pri" data-gpick="'+k+'">Choose…</button>')+'</td></tr>';}).join('');
- return modal('Connect folders','<p>Each computer approves its folders once. For each row: <b>Copy</b> a path (use the UNC one if the drive letter is not mapped), press <b>Choose…</b>, click the address bar of the folder window, paste, press Enter, then click <b>Select Folder</b>.</p><table class="t">'+rows+'</table>'+
+ return modal('Connect folders','<p>Each computer approves its folders once. The folder window opens on your Desktop so it appears quickly. For each row: <b>Copy</b> a path (use the UNC one if the drive letter is not mapped), press <b>Choose…</b>, click the address bar of the folder window, paste, press Enter, then click <b>Select Folder</b>.</p><table class="t">'+rows+'</table>'+
   (S.needReconnect.length?'<p><button class="pri" id="gRecon">Reconnect saved folders</button></p>':'')+'<p class="muted">The page remembers these on this computer and browser. Photos you replace are saved to the shared folder\'s images folder.</p>',[{t:'Done',v:true,pri:true}]);}
 
 /* ---------- modal ---------- */
@@ -291,30 +295,51 @@ async function needUser(){if(S.user)return true;
 
 /* ---------- photos & drawings ---------- */
 const PH=new Map();let phActive=0;const phQ=[];
-async function scan(dir){const m=new Map();if(!dir)return m;try{for await(const [n,h] of dir.entries()){if(h.kind!=='file')continue;const mm=n.match(/^(.+)\.(jpe?g|png|webp)$/i);if(mm){const k=mm[1].toLowerCase();if(!m.has(k)||/jpe?g/i.test(mm[2]))m.set(k,h);}}}catch(e){}return m;}
-function ensureIdx(){if(!S.idxP)S.idxP=Promise.all([scan(S.imgDir),scan(S.photoDir)]).then(([a,b])=>({a,b}));return S.idxP;}
-async function findPhotoFile(key){const {a,b}=await ensureIdx();const k=key.toLowerCase();const h=a.get(k)||b.get(k);if(!h)return null;try{return await h.getFile();}catch(e){return null;}}
-function photoFile(key){if(!PH.has(key))PH.set(key,findPhotoFile(key));return PH.get(key);}
+async function retry(fn,n=3){let e;for(let i=0;i<n;i++){try{return await fn();}catch(er){e=er;await sleep(450*(i+1));}}throw e;}
+async function scan(dir){const m=new Map();if(!dir)return m;for await(const [n,h] of dir.entries()){if(h.kind!=='file')continue;const mm=n.match(/^(.+)\.(jpe?g|png|webp)$/i);if(mm){const k=mm[1].toLowerCase();if(!m.has(k)||/jpe?g/i.test(mm[2]))m.set(k,h);}}return m;}
+function ensureIdx(){if(!S.idxP){S.idxP=retry(()=>scan(S.imgDir));S.idxP.catch(()=>{S.idxP=null;});}return S.idxP;}
+const notFound=e=>e&&(e.name==='NotFoundError'||e.name==='TypeError');
+async function findPhotoFile(key,noPhotoHint){
+ const idx=await ensureIdx();let h=idx.get(key.toLowerCase());
+ if(!h&&S.photoDir&&!noPhotoHint){for(const ext of ['jpg','jpeg','png','webp']){try{h=await S.photoDir.getFileHandle(key+'.'+ext);break;}catch(e){if(!notFound(e))throw e;}}}
+ if(!h)return null;
+ try{return await h.getFile();}catch(e){if(notFound(e))return null;throw e;}}
+function photoFile(key,hint){const ck=key+(hint?'|n':'');if(!PH.has(ck)){const pr=retry(()=>findPhotoFile(key,hint));PH.set(ck,pr);pr.catch(()=>PH.delete(ck));}return PH.get(ck);}
 function runPh(){while(phActive<6&&phQ.length){const j=phQ.shift();phActive++;j().catch(()=>{}).finally(()=>{phActive--;runPh();});}}
 const TH=new Map();
 const thumbVer=p=>((p['Photo Updated']||'')+'-'+(cfg().thumbEpoch||0)).replace(/\D/g,'')||'0';
-async function makeThumb(key,ver){
+async function makeThumb(key,ver,hint){
  const ck=key+'~'+ver;
  const hit=await hGet(ck,'t');if(hit)return URL.createObjectURL(hit);
- if(S.thumbDir){try{const f=await (await S.thumbDir.getFileHandle(ck+'.jpg')).getFile();hPut(ck,f,'t');return URL.createObjectURL(f);}catch(e){}}
- const f=await photoFile(key);if(!f)return null;
+ if(S.thumbDir){try{const f=await (await S.thumbDir.getFileHandle(ck+'.jpg')).getFile();const bl=new Blob([await f.arrayBuffer()],{type:'image/jpeg'});hPut(ck,bl,'t');return URL.createObjectURL(bl);}catch(e){}}
+ const f=await photoFile(key,hint);if(!f)return null;
  let blob;
  try{const bm=await createImageBitmap(f,{resizeWidth:360,resizeQuality:'low'});const c=new OffscreenCanvas(bm.width,bm.height);c.getContext('2d').drawImage(bm,0,0);blob=await c.convertToBlob({type:'image/jpeg',quality:.78});bm.close();}
  catch(e){return URL.createObjectURL(f);}
  hPut(ck,blob,'t');
  if(S.thumbDir){(async()=>{try{const fh=await S.thumbDir.getFileHandle(ck+'.jpg',{create:true});const w=await fh.createWritable();await w.write(blob);await w.close();}catch(e){}})();}
  return URL.createObjectURL(blob);}
-function thumb(img){const key=img.dataset.key,ver=img.dataset.ver,ck=key+'~'+ver;phQ.push(async()=>{
- let u=TH.get(ck);if(u===undefined){u=await makeThumb(key,ver);TH.set(ck,u);}
- if(!img.isConnected)return;if(u)img.src=u;else if(img.parentNode)img.parentNode.textContent='No photo';});runPh();}
-const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){io.unobserve(e.target);thumb(e.target);}},{rootMargin:'600px'});
+async function runThumb(img){
+ const key=img.dataset.key,ver=img.dataset.ver,ck=key+'~'+ver,hint=img.dataset.nop==='1';
+ try{let u=TH.get(ck);if(u===undefined){u=await retry(()=>makeThumb(key,ver,hint),3);TH.set(ck,u);}
+  if(!img.isConnected)return;img._done=true;
+  if(u){img.src=u;img.parentNode.classList.remove('ld');}else if(img.parentNode){img.parentNode.classList.remove('ld');img.parentNode.textContent='No photo';}}
+ catch(e){if(!img.isConnected||!img.parentNode)return;const ph=img.parentNode;ph.classList.remove('ld');
+  ph.innerHTML='<span class="retry" style="cursor:pointer;color:#b45309">Photo slow to load. Click to retry</span>';
+  ph.querySelector('.retry').addEventListener('click',ev=>{ev.stopPropagation();ph.classList.add('ld');ph.innerHTML='<img data-key="'+esc(key)+'" data-ver="'+esc(ver)+'" data-nop="'+(hint?1:0)+'" decoding="async" alt="">';const ni=ph.firstChild;io.observe(ni);});}}
+function thumb(img){if(img._done||img._q)return;img._q=true;phQ.unshift(async()=>{img._q=false;if(!img._vis)return;await runThumb(img);});runPh();}
+const io=new IntersectionObserver(es=>{for(const e of es){e.target._vis=e.isIntersecting;if(e.isIntersecting)thumb(e.target);}},{rootMargin:'400px'});
 function watchThumbs(root){$$('img[data-key]',root).forEach(i=>io.observe(i));}
-async function fullURL(key){const f=await photoFile(key);return f?URL.createObjectURL(f):null;}
+async function buildAllThumbs(){
+ if(!S.thumbDir||!S.data)return toast('Connect the shared folder first');
+ const have=new Set();try{for await(const [n] of S.thumbDir.entries())have.add(n);}catch(e){}
+ const seen=new Set();const todo=[];for(const p of S.data.parts){if(p['Has Photo']==='No')continue;const k=fileKey(p),v=thumbVer(p);if(!k||seen.has(k))continue;seen.add(k);if(!have.has(k+'~'+v+'.jpg'))todo.push([k,v]);}
+ if(!todo.length)return toast('All thumbnails are already built');
+ let done=0,fail=0,stop=false;const o=document.createElement('div');o.className='ov';o.innerHTML='<div class="mdl"><h3>Building thumbnails</h3><p id="btp">0 of '+todo.length+'</p><div class="btns"><button id="btx">Stop</button></div></div>';document.body.appendChild(o);
+ $('#btx',o).onclick=()=>{stop=true;};
+ const worker=async()=>{while(!stop&&todo.length){const [k,v]=todo.shift();try{const u=await retry(()=>makeThumb(k,v,false),2);if(u)URL.revokeObjectURL(u);}catch(e){fail++;}done++;$('#btp',o).textContent=done+' done'+(fail?' ('+fail+' failed)':'')+' · '+todo.length+' left';}};
+ await Promise.all([worker(),worker(),worker(),worker()]);o.remove();toast('Thumbnails built'+(fail?' ('+fail+' failed)':''),4000);}
+async function fullURL(key,hint){try{const f=await photoFile(key,hint);return f?URL.createObjectURL(f):null;}catch(e){return null;}}
 const isCad=n=>/\.(dwg|slddrw|sldprt|sldasm)$/i.test(n);
 async function dwgFiles(key){
  if(!S.dwgDir||!key)return [];
@@ -390,7 +415,7 @@ function drawGrid(){
  watchThumbs(g);selBar();}
 function card(p){const col=paperFor(p['Thickness (in)']);const st=p['Card Status']||'No status';
  return '<div class="pc c-'+col+(p['Delete Tag']?' tag':'')+'" data-id="'+p.id+'"><input type="checkbox" class="ck" data-id="'+p.id+'"'+(S.sel.has(p.id)?' checked':'')+'>'+
- '<div class="ph"><img data-key="'+esc(fileKey(p))+'" data-ver="'+thumbVer(p)+'" decoding="async" alt=""></div><div class="bd"><div class="dw">'+esc(p['Drawing'])+(p['Variant / Finish']?'<small>'+esc(p['Variant / Finish'])+'</small>':'')+'</div>'+
+ '<div class="ph ld"><img data-key="'+esc(fileKey(p))+'" data-ver="'+thumbVer(p)+'" data-nop="'+(p['Has Photo']==='No'?1:0)+'" decoding="async" alt=""></div><div class="bd"><div class="dw">'+esc(p['Drawing'])+(p['Variant / Finish']?'<small>'+esc(p['Variant / Finish'])+'</small>':'')+'</div>'+
  '<div class="ds">'+esc(p['Description']||p['Secondary Description']||'')+'</div>'+
  '<div class="mt"><span class="chip '+stCls(st)+'">'+esc(st)+'</span><span><span class="dot c-'+col+'"></span> '+esc(fmtT(p['Thickness (in)'])||'no thk')+'</span><span>'+esc(p['Rack Location']||'no rack')+'</span>'+(S.queue.has(p.id)?'<span class="chip st-Ready">queued</span>':'')+(p['Delete Tag']?'<span class="chip" style="background:#fecaca">delete tag</span>':'')+'</div></div></div>';}
 function selBar(){const e=$('#selbar');if(!e)return;const n=S.sel.size;
@@ -558,7 +583,7 @@ function renderAdmin(){
  $('#main').innerHTML=
  '<div class="panel"><h2>Delete & archive</h2><p>'+tagged+' parts are tagged for delete. Deleting moves them to the archive below (they can be restored).</p><button class="dng" id="bDelTag"'+(tagged?'':' disabled')+'>Move '+tagged+' tagged parts to archive</button></div>'+
  '<div class="panel"><h2>Archive ('+del.length+')</h2>'+(del.length?'<table class="t">'+del.slice(0,200).map((d,i)=>'<tr><td>'+esc(title(d.part))+'</td><td>'+esc(d.part['Description']||'')+'</td><td>'+esc(d.part['Rack Location']||'')+'</td><td class="muted">'+esc(d.on)+' by '+esc(d.by)+'</td><td><button data-rest="'+d.part.id+'">Restore</button></td></tr>').join('')+'</table>':'<p class="muted">Nothing archived.</p>')+'</div>'+
- '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button> <button id="bRebuild">Rebuild thumbnails</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
+ '<div class="panel"><h2>Backup & export</h2><button id="bBackup">Back up now</button> <button id="bXlsx">Export to Excel (.xlsx)</button> <button id="bJson">Download JSON</button> <button id="bImp">Import JSON (replaces data)</button> <button id="bRebuild">Rebuild thumbnails</button> <button id="bBuildAll">Build all thumbnails now</button><p class="muted">A daily backup is saved automatically to the Backups folder (last 30 kept).</p></div>'+
  '<div class="panel"><h2>Folder paths (shown in the setup guide)</h2><div class="fg">'+[['sharedPath','Kanban System folder'],['sharedUnc','Kanban System folder (UNC)'],['photosPath','Photos folder'],['photosUnc','Photos folder (UNC)'],['dwgPath','Drawings folder'],['dwgUnc','Drawings folder (UNC)']].map(([k,t])=>'<label class="w">'+t+'<input data-path="'+k+'" value="'+esc(c[k]||'')+'" placeholder="'+(k.endsWith('Unc')?'\\\\server\\share\\…':'N:\\…')+'"></label>').join('')+'</div><button class="pri" id="bSaveCfg2">Save paths</button></div>'+
  '<div class="panel"><h2>Paper colors by thickness</h2><textarea class="lst" id="lPaper" style="height:130px">'+esc(c.paper.map(x=>x.t+' = '+x.c).join('\n'))+'</textarea></div>'+
  '<div class="panel"><h2>Lists (one per line)</h2><div class="fg">'+['racks','materials'].map(k=>'<label>'+k+'<textarea class="lst" data-l="'+k+'">'+esc(c[k].join('\n'))+'</textarea></label>').join('')+lst.map(k=>'<label>'+esc(k)+'<textarea class="lst" data-ll="'+esc(k)+'">'+esc(c.lists[k].join('\n'))+'</textarea></label>').join('')+'</div><button class="pri" id="bSaveCfg">Save lists</button></div>';}
@@ -593,7 +618,8 @@ async function openPart(id,opts2){
  (fam.length?'<div class="ghd">Related (same base number)</div><div class="rel">'+fam.map(x=>'<a data-open="'+x.id+'">'+esc(title(x))+(x['Rack Location']?' · '+esc(x['Rack Location']):'')+'</a>').join('')+'</div>':''))+
  GROUPS.map(([g,fs])=>'<div class="ghd">'+g+'</div><div class="fg">'+fs.filter(f=>!(isNew&&g==='System')).map(f=>inputFor(f,p,edit,isNew)).join('')+'</div>').join('')+'</div>';
  d.classList.add('open');
- if(!isNew){const key=fileKey(p);fullURL(key).then(u=>{const im=$('#bigph');if(!im)return;if(u){im.src=u;im.style.display='block';}else $('#phnote').textContent='No photo found for '+key;});
+ if(!isNew){const key=fileKey(p);const tu=TH.get(key+'~'+thumbVer(p));{const im0=$('#bigph');if(tu&&im0){im0.src=tu;im0.style.display='block';}else $('#phnote').textContent='Loading photo…';}
+  fullURL(key).then(u=>{const im=$('#bigph');if(!im)return;if(u){im.src=u;im.style.display='block';$('#phnote').textContent='';}else $('#phnote').textContent='No photo found for '+key;});
   dwgFiles(key).then(fs=>{const e=$('#dwl');if(!e||!S.dwgDir)return;const root=(cfg().dwgUnc||cfg().dwgPath||'').replace(/[\\\/]+$/,'');
    e.innerHTML=fs.length?fs.map(([n,h,fo],i)=>{const cad=isCad(n);return '<div style="margin:2px 0"><a data-dwg="'+i+'">'+esc(n)+'</a>'+(cad?' <span class="chip">'+n.split('.').pop().toUpperCase()+' · downloads</span>':'')+(root?' <button data-dwgcopy="'+i+'" data-path="'+esc(root+'\\'+fo+'\\'+n)+'" style="padding:1px 8px">Copy path</button>':'')+'</div>';}).join(''):'<span class="muted">No drawing files found for '+esc(key)+'</span>';e._files=fs;});}}
 function closeDrawer(){$('#drawer').classList.remove('open');S.editing=null;S.edit=null;}
@@ -779,6 +805,7 @@ document.addEventListener('click',async e=>{
   catch(er){if(w)w.close();toast('Could not open that drawing: '+er.message,5000);}return;}
  if(id==='bDelTag')return deleteTagged();
  if(t.dataset.rest)return restore(t.dataset.rest);
+ if(id==='bBuildAll')return buildAllThumbs();
  if(id==='bRebuild'){try{await commit(d=>{d.config.thumbEpoch=(d.config.thumbEpoch||0)+1;});if(S.thumbDir){const names=[];for await(const [n] of S.thumbDir.entries())names.push(n);for(const n of names)try{await S.thumbDir.removeEntry(n);}catch(er){}}await tClear();TH.clear();S.idxP=null;PH.clear();toast('Thumbnails will be rebuilt as you scroll');}catch(er){toast('Could not rebuild: '+er.message,5000);}return;}
  if(id==='bBackup')return backupNow();
  if(id==='bXlsx')return exportXlsx();
