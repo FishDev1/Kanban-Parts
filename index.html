@@ -89,6 +89,21 @@ table.t td,table.t th{border-bottom:1px solid var(--line);padding:5px 8px;text-a
 .welcome{max-width:640px;margin:60px auto;text-align:center}
 .welcome button{font-size:16px;padding:12px 22px}
 textarea.lst{width:100%;height:150px}
+#shbox{overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;height:calc(100vh - 215px);min-height:320px;outline:none}
+table.sh{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px}
+table.sh th,table.sh td{height:28px;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#fff}
+table.sh thead th{position:sticky;top:0;z-index:3;background:#e5e7eb;font-weight:700;cursor:pointer;user-select:none;text-align:left}
+table.sh thead tr.flt th{top:28px;background:#f3f4f6;padding:0;cursor:default}
+table.sh thead tr.flt input{width:100%;height:26px;border:0;border-radius:0;padding:0 6px;background:transparent;font-size:12px}
+table.sh td.rn,table.sh th.rn{position:sticky;left:0;z-index:2;background:#f3f4f6;color:#6b7280;text-align:right;cursor:pointer;width:46px}
+table.sh td.fz,table.sh th.fz{position:sticky;left:46px;z-index:2;font-weight:700;background:#fff;box-shadow:2px 0 0 #cbd5e1}
+table.sh thead th.rn,table.sh thead th.fz{z-index:5}
+table.sh thead th.fz{background:#e5e7eb}table.sh thead tr.flt th.fz{background:#f3f4f6}
+table.sh tr.tg td{color:#9ca3af;text-decoration:line-through}
+table.sh td.cs{outline:2px solid var(--acc);outline-offset:-2px;background:#eff6ff}
+table.sh td.ro{color:#6b7280}
+table.sh td[class*=c-]{border-left:5px solid var(--c)}
+table.sh td .cedit{width:100%;height:100%;border:0;border-radius:0;padding:0 2px;margin:0;font:inherit;background:#fff}
 #printRoot{display:none}
 .sheet{width:8.5in;height:10.97in;overflow:hidden;display:grid;grid-template-columns:4.25in 4.25in;grid-template-rows:1fr 1fr;page-break-after:always;break-after:page;background:#fff}
 .cardp{margin:.18in;border:3px solid #000;padding:.1in .14in;display:flex;flex-direction:column;overflow:hidden;font-family:Arial,sans-serif;color:#000;font-size:11pt}
@@ -119,6 +134,7 @@ textarea.lst{width:100%;height:150px}
  <nav id="tabs">
   <button data-v="parts">Parts</button>
   <button data-v="board">Board</button>
+  <button data-v="sheet">Sheet</button>
   <button data-v="queue">Print queue<span class="badge" id="qn">0</span></button>
   <button data-v="todo">To Do</button>
   <button data-v="admin" id="tabAdmin" style="display:none">Admin</button>
@@ -339,7 +355,7 @@ function render(){
  $('#btnUser').textContent=S.user||'Set name';$('#qn').textContent=S.queue.size;
  const m=$('#main');
  if(!S.dir||!S.data){m.innerHTML=welcome();return;}
- if(S.view==='parts')renderParts();else if(S.view==='board')renderBoard();else if(S.view==='queue')renderQueue();else if(S.view==='todo')renderTodo();else renderAdmin();}
+ if(S.view==='parts')renderParts();else if(S.view==='board')renderBoard();else if(S.view==='sheet')renderSheet();else if(S.view==='queue')renderQueue();else if(S.view==='todo')renderTodo();else renderAdmin();}
 function welcome(){const rc=S.needReconnect.length;return '<div class="welcome"><h2>Kanban Parts System</h2>'+
  (rc?'<p>Your folders are remembered. Browsers ask for permission again each visit.</p><button class="pri" id="bRecon">Reconnect to shared folder</button>':
  '<p>Choose the shared <b>Kanban System</b> folder on the network drive. All parts data and photos stay there. Works in Chrome or Edge.</p><button class="pri" id="bPick">Choose Shared Folder</button>')+'</div>';}
@@ -391,6 +407,130 @@ function renderBoard(){
  return '<div class="col" data-st="'+esc(s)+'"><h3><span>'+esc(s||'(no status)')+'</span><span class="muted">'+arr.length+'</span></h3>'+
  arr.slice(0,lim).map(p=>'<div class="bc c-'+paperFor(p['Thickness (in)'])+'" draggable="true" data-id="'+p.id+'"><b>'+esc(title(p))+'</b><div>'+esc(p['Description']||'')+'</div><div class="muted">'+esc(p['Rack Location']||'no rack')+' · '+esc(fmtT(p['Thickness (in)'])||'no thk')+'</div></div>').join('')+
  (arr.length>lim?'<button data-more="'+esc(s)+'" style="width:100%">Show more ('+(arr.length-lim)+')</button>':'')+'</div>';}).join('')+'</div>';}
+
+/* --- sheet (spreadsheet view) --- */
+const RH=28;
+const SHEET_FIRST=['Drawing','Variant / Finish','Description','Rack Location','Card Status','Thickness (in)','Process Route','Reorder Qty','Reorder Point','Red Reorder Point'];
+const RO_KEYS=['Card ID','Has Photo','Original Entry','Delete Tag','Last Edited By','Last Edited'];
+const FT=GROUPS.flatMap(g=>g[1]);const typeOf=k=>(FT.find(f=>f[0]===k)||[k,'t'])[1];
+const SCOLS=[...SHEET_FIRST,...FT.map(f=>f[0]).filter(k=>!SHEET_FIRST.includes(k))];
+const SW={'Drawing':96,'Variant / Finish':110,'Description':260,'Secondary Description':230,'Rack Location':150,'Card Status':190,'Thickness (in)':100,'Process Route':160,'Material':270,'Notes':240,'Comments':240,'Migrated To Laser':150,'Missing Info':170,'Data Gaps':170,'Last Edited':120,'Last Edited By':130,'Card ID':180};
+const colW=k=>SW[k]||(typeOf(k)==='n'?100:120);
+S.cf={};S.sort=null;S.sc=null;S.ed=null;
+const isRO=k=>RO_KEYS.includes(k);
+function renderSheet(){
+ const sts=cfg().lists['Card Status'];
+ const tw=46+SCOLS.reduce((a,k)=>a+colW(k),0);
+ $('#main').innerHTML='<div class="bar"><input type="search" id="q" placeholder="Search all columns…" value="'+esc(S.q)+'">'+
+ '<select id="fStatus">'+opts(sts,S.f.status,'All statuses')+'</select><select id="fColor">'+thickSel(S.f.color)+'</select><select id="fRack">'+opts(cfg().racks,S.f.rack,'All racks')+'</select>'+
+ '<select id="fFlag"><option value="">No flag filter</option>'+[['inqueue','In print queue'],['tagged','Tagged for delete'],['nophoto','No photo'],['nothick','No thickness'],['norack','No rack']].map(([v,t])=>'<option value="'+v+'"'+(S.f.flag===v?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
+ '<button id="bSClear">Clear filters</button><span class="muted" id="cnt"></span></div>'+
+ '<div class="muted" style="font-size:12px;margin-bottom:6px">Click a cell to select, double-click or type to edit, Enter/Tab to move, arrow keys to navigate, Delete to clear, Ctrl+C / Ctrl+V to copy and paste (paste a column to fill down). Click a header to sort. The grey row number opens the part page.</div>'+
+ '<div id="shbox" tabindex="0"><table class="sh" style="width:'+tw+'px"><colgroup><col style="width:46px">'+SCOLS.map(k=>'<col style="width:'+colW(k)+'px">').join('')+'</colgroup>'+
+ '<thead><tr><th class="rn">#</th>'+SCOLS.map((k,i)=>'<th data-sort="'+esc(k)+'"'+(i===0?' class="fz"':'')+'>'+esc(k)+(S.sort&&S.sort.k===k?(S.sort.d>0?' ▲':' ▼'):'')+'</th>').join('')+'</tr>'+
+ '<tr class="flt"><th class="rn"></th>'+SCOLS.map((k,i)=>'<th'+(i===0?' class="fz"':'')+'><input data-cf="'+esc(k)+'" value="'+esc(S.cf[k]||'')+'" placeholder="filter"></th>').join('')+'</tr></thead><tbody id="shb"></tbody></table></div>';
+ paintSheet(true);}
+function sheetRows(){
+ const sig=S.ver+'|'+S.q+'|'+JSON.stringify(S.f)+'|'+JSON.stringify(S.cf)+'|'+JSON.stringify(S.sort)+(S.f.flag==='inqueue'?'|'+S.queue.size:'');
+ if(S._ss===sig)return S._sr;
+ let r=visible();const cfs=Object.entries(S.cf).filter(([k,v])=>v&&v.trim());
+ if(cfs.length)r=r.filter(p=>cfs.every(([k,v])=>cellText(p,k).toLowerCase().includes(v.trim().toLowerCase())));
+ if(S.sort){const {k,d}=S.sort;r=[...r].sort((a,b)=>{const x=a[k],y=b[k];const ex=x===undefined||x==='',ey=y===undefined||y==='';if(ex||ey)return ex&&ey?0:ex?1:-1;
+  const nx=typeof x==='number',ny=typeof y==='number';if(nx&&ny)return (x-y)*d;return String(x).localeCompare(String(y),undefined,{numeric:true,sensitivity:'base'})*d;});}
+ S._ss=sig;S._sr=r;S._si=new Map(r.map((p,i)=>[p.id,i]));return r;}
+function cellText(p,k){const v=p[k];if(v===undefined||v===null)return '';return k==='Thickness (in)'?fmtT(v):String(v);}
+function paintSheet(reset){
+ const box=$('#shbox');if(!box)return;
+ const rows=sheetRows();S.sv=rows;if(reset&&S.sheetReset!==false){box.scrollTop=0;}
+ if(S.ed)return;
+ const h=box.clientHeight||600;const total=rows.length;const top=Math.max(0,box.scrollTop);
+ const first=Math.max(0,Math.floor(top/RH)-12),last=Math.min(total,Math.ceil((top+h)/RH)+12);
+ let html=first?'<tr style="height:'+(first*RH)+'px"><td colspan="'+(SCOLS.length+1)+'" style="padding:0;border:0"></td></tr>':'';
+ for(let i=first;i<last;i++){const p=rows[i];
+  html+='<tr'+(p['Delete Tag']?' class="tg"':'')+'><td class="rn" data-open="'+p.id+'" title="Open part">'+(i+1)+'</td>'+SCOLS.map((k,j)=>{
+   const sel=S.sc&&S.sc.id===p.id&&S.sc.k===k;const cls=(j===0?'fz ':'')+(isRO(k)?'ro ':'')+(sel?'cs ':'')+(k==='Thickness (in)'?'c-'+paperFor(p[k])+' ':'');
+   return '<td class="'+cls+'" data-id="'+p.id+'" data-k="'+esc(k)+'" title="'+esc(cellText(p,k))+'">'+esc(cellText(p,k))+'</td>';}).join('')+'</tr>';}
+ if(last<total)html+='<tr style="height:'+((total-last)*RH)+'px"><td colspan="'+(SCOLS.length+1)+'" style="padding:0;border:0"></td></tr>';
+ $('#shb').innerHTML=html;$('#cnt').textContent=total+' of '+S.data.parts.length+' rows';}
+let shRaf=0;
+document.addEventListener('scroll',e=>{if(e.target&&e.target.id==='shbox'&&!shRaf){shRaf=requestAnimationFrame(()=>{shRaf=0;S.sheetReset=false;paintSheet(false);S.sheetReset=true;});}},true);
+function cellEl(id,k){return $('#shb td[data-id="'+id+'"][data-k="'+k.replace(/"/g,'\\"')+'"]');}
+function selectCell(id,k,scroll){
+ const o=$('#shb td.cs');if(o)o.classList.remove('cs');S.sc={id,k};
+ if(scroll){const i=S._si.get(id);const box=$('#shbox');if(i!==undefined){const y=i*RH,hh=box.clientHeight-RH*2-8;if(y<box.scrollTop+RH)box.scrollTop=Math.max(0,y-RH);else if(y+RH>box.scrollTop+hh)box.scrollTop=y+RH-hh;}
+  S.sheetReset=false;paintSheet(false);S.sheetReset=true;
+  const j=SCOLS.indexOf(k);const left=46+SCOLS.slice(0,j).reduce((a,c)=>a+colW(c),0);const bx=$('#shbox');const fzW=46+colW(SCOLS[0]);
+  if(j>0){if(left<bx.scrollLeft+fzW)bx.scrollLeft=Math.max(0,left-fzW);else if(left+colW(k)>bx.scrollLeft+bx.clientWidth)bx.scrollLeft=left+colW(k)-bx.clientWidth+20;}}
+ else{const c=cellEl(id,k);if(c)c.classList.add('cs');}}
+function moveSel(dr,dc){if(!S.sc)return;const i=S._si.get(S.sc.id);const j=SCOLS.indexOf(S.sc.k);
+ const ni=Math.min(S.sv.length-1,Math.max(0,i+dr)),nj=Math.min(SCOLS.length-1,Math.max(0,j+dc));if(S.sv[ni])selectCell(S.sv[ni].id,SCOLS[nj],true);}
+function coerce(k,text){const t=typeOf(k);text=String(text).trim();
+ if(text==='')return {v:undefined};
+ if(t==='thick'){if(/^n\/?a$/i.test(text))return {v:'N/A'};const n=Number(text);if(isNaN(n))return {err:'Thickness must be a number or N/A'};return {v:n};}
+ if(t==='n'){const n=Number(text);return {v:isNaN(n)?text:n};}
+ if(t==='yn'){const m=/^y(es)?$/i.test(text)?'Yes':/^n(o)?$/i.test(text)?'No':null;return m?{v:m}:{err:k+' must be Yes or No'};}
+ if(t==='d'){return /^\d{4}-\d{2}-\d{2}$/.test(text)?{v:text}:{err:'Dates use yyyy-mm-dd'};}
+ if(t.startsWith('sel:')){const l=listFor(t.slice(4));const m=l.find(x=>x.toLowerCase()===text.toLowerCase());return m?{v:m}:{err:'"'+text+'" is not in the '+k+' list'};}
+ return {v:text};}
+async function applyCells(edits){
+ if(!edits.length)return true;if(!await needUser())return false;
+ try{await commit(disk=>{for(const e of edits){const p=disk.parts.find(x=>x.id===e.id);if(!p)throw new Error('A part was deleted by someone else.');
+   if(!same(p[e.k],e.old))throw new Error('"'+e.k+'" on '+title(p)+' was just changed by someone else. Your change was not saved.');
+   const cand={...p};if(e.v===undefined)delete cand[e.k];else cand[e.k]=e.v;
+   if(e.k==='Drawing'&&!cand['Drawing'])throw new Error('Drawing cannot be empty.');
+   if(['Drawing','Variant / Finish','Rack Location'].includes(e.k)){cand['Card ID']=cand['Drawing']+(cand['Rack Location']?'|'+cand['Rack Location']:'');
+    const dup=disk.parts.find(x=>x.id!==cand.id&&pkey(x)===pkey(cand));if(dup)throw new Error('Drawing '+title(cand)+' is already listed in rack '+(cand['Rack Location']||'(none)')+'.');}
+   cand._rev=(p._rev||0)+1;cand['Last Edited By']=S.user;cand['Last Edited']=nowStr();
+   Object.keys(p).forEach(k=>delete p[k]);Object.assign(p,cand);}});return true;}
+ catch(er){toast(er.message,5000);return false;}}
+function startEdit(id,k,init){
+ if(isRO(k)||S.ed)return;const td=cellEl(id,k);const p=S.byId.get(id);if(!td||!p)return;
+ selectCell(id,k,false);S.ed={id,k,old:p[k]};const t=typeOf(k);let el;
+ if(t==='yn'||t.startsWith('sel:')||t==='thick'){el=document.createElement('select');
+  const lst=t==='yn'?['Yes','No']:t==='thick'?cfg().paper.map(x=>x.t==='N/A'?'N/A':fmtT(x.t)).concat(['1.000']):listFor(t.slice(4));
+  const cur=cellText(p,k);el.innerHTML=opts(withCur(lst,cur),cur,'');}
+ else{el=document.createElement('input');el.type='text';el.value=init!==undefined?init:cellText(p,k);}
+ el.className='cedit';td.textContent='';td.appendChild(el);el.focus();
+ if(el.tagName==='INPUT'){if(init===undefined)el.select();else el.setSelectionRange(el.value.length,el.value.length);}}
+function cancelEdit(){S.ed=null;paintSheet(false);const b=$('#shbox');if(b)b.focus();}
+async function commitEdit(dr,dc){
+ const ed=S.ed;const el=$('#shb .cedit');if(!ed||!el)return;const r=coerce(ed.k,el.value);
+ if(r.err){toast(r.err,4000);el.focus();return;}
+ S.ed=null;let ok=true;
+ if(!same(r.v,ed.old))ok=await applyCells([{id:ed.id,k:ed.k,v:r.v,old:ed.old}]);
+ S._ss=null;paintSheet(false);if(S.sc)selectCell(S.sc.id,S.sc.k,false);
+ if(ok&&(dr||dc))moveSel(dr,dc);$('#shbox').focus();}
+function editKey(e){
+ if(e.key==='Enter'){e.preventDefault();commitEdit(e.shiftKey?-1:1,0);}
+ else if(e.key==='Tab'){e.preventDefault();commitEdit(0,e.shiftKey?-1:1);}
+ else if(e.key==='Escape'){e.preventDefault();cancelEdit();}}
+async function sheetKey(e){
+ if(!S.sc||!$('#shbox'))return;const mod=e.ctrlKey||e.metaKey;
+ const mv={ArrowDown:[1,0],ArrowUp:[-1,0],ArrowRight:[0,1],ArrowLeft:[0,-1],Tab:[0,e.shiftKey?-1:1],Enter:[e.shiftKey?-1:1,0]}[e.key];
+ if(e.key==='Enter'&&!mod&&!S.ed){e.preventDefault();return startEdit(S.sc.id,S.sc.k);}
+ if(mv&&!mod){e.preventDefault();return moveSel(mv[0],mv[1]);}
+ if(e.key==='PageDown'||e.key==='PageUp'){e.preventDefault();return moveSel((e.key==='PageDown'?1:-1)*Math.floor($('#shbox').clientHeight/RH-3),0);}
+ if(e.key==='Home'&&mod){e.preventDefault();return selectCell(S.sv[0].id,S.sc.k,true);}
+ if(e.key==='End'&&mod){e.preventDefault();return selectCell(S.sv[S.sv.length-1].id,S.sc.k,true);}
+ if(e.key==='F2'){e.preventDefault();return startEdit(S.sc.id,S.sc.k);}
+ if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();const p=S.byId.get(S.sc.id);if(isRO(S.sc.k)||p[S.sc.k]===undefined)return;
+  if(await applyCells([{id:p.id,k:S.sc.k,v:undefined,old:p[S.sc.k]}])){S._ss=null;paintSheet(false);}return;}
+ if(e.key.length===1&&!mod&&!e.altKey){e.preventDefault();startEdit(S.sc.id,S.sc.k,e.key);}}
+document.addEventListener('keydown',e=>{if(S.view!=='sheet'||document.querySelector('.ov')||$('#drawer').classList.contains('open'))return;
+ const t=e.target;if(t.classList&&t.classList.contains('cedit'))return editKey(e);
+ if(['INPUT','SELECT','TEXTAREA'].includes(t.tagName))return;sheetKey(e);});
+document.addEventListener('copy',e=>{if(S.view!=='sheet'||!S.sc||S.ed||['INPUT','TEXTAREA'].includes((e.target||{}).tagName))return;const p=S.byId.get(S.sc.id);if(!p)return;e.clipboardData.setData('text/plain',cellText(p,S.sc.k));e.preventDefault();toast('Copied');});
+document.addEventListener('paste',async e=>{if(S.view!=='sheet'||!S.sc||S.ed||['INPUT','TEXTAREA','SELECT'].includes((e.target||{}).tagName))return;
+ const txt=e.clipboardData.getData('text/plain');if(!txt)return;e.preventDefault();
+ const lines=txt.replace(/\r/g,'').replace(/\n$/,'').split('\n').map(l=>l.split('\t'));
+ const i0=S._si.get(S.sc.id),j0=SCOLS.indexOf(S.sc.k);const edits=[];
+ for(let r=0;r<lines.length;r++){const p=S.sv[i0+r];if(!p)break;for(let c=0;c<lines[r].length;c++){const k=SCOLS[j0+c];if(!k||isRO(k))continue;
+  const co=coerce(k,lines[r][c]);if(co.err){toast(co.err+' (row '+(i0+r+1)+'). Nothing was pasted.',5000);return;}
+  if(!same(co.v,p[k]))edits.push({id:p.id,k,v:co.v,old:p[k]});}}
+ if(edits.length>200&&!(await modal('Paste '+edits.length+' cells?','<p>This changes '+edits.length+' cells.</p>',[{t:'Cancel',v:false},{t:'Paste',v:true,pri:true}])).v)return;
+ if(await applyCells(edits)){S._ss=null;paintSheet(false);toast('Pasted '+edits.length+' cell'+(edits.length===1?'':'s'));}});
+document.addEventListener('dblclick',e=>{const c=e.target.closest&&e.target.closest('#shb td[data-k]');if(c&&!S.ed)startEdit(c.dataset.id,c.dataset.k);});
+document.addEventListener('input',e=>{const t=e.target;if(t.dataset&&t.dataset.cf!==undefined){clearTimeout(S.cft);S.cft=setTimeout(()=>{S.cf[t.dataset.cf]=t.value;paintSheet(true);},160);}});
 
 /* --- print queue --- */
 function renderQueue(){
@@ -598,6 +738,9 @@ function exportXlsx(){
 document.addEventListener('click',async e=>{
  const t=e.target;const id=t.id;
  const tab=t.closest('#tabs button');if(tab){S.view=tab.dataset.v;S.shown=120;closeDrawer();return render();}
+ const sh=t.closest('#shb td[data-k]');if(sh&&!t.classList.contains('cedit')){if(S.ed)await commitEdit(0,0);return selectCell(sh.dataset.id,sh.dataset.k,false);}
+ const sorth=t.closest('th[data-sort]');if(sorth){const k=sorth.dataset.sort;S.sort=!S.sort||S.sort.k!==k?{k,d:1}:S.sort.d===1?{k,d:-1}:null;return renderSheet();}
+ if(id==='bSClear'){S.q='';S.f={status:'',color:'',rack:'',route:'',flag:''};S.cf={};S.sort=null;return renderSheet();}
  if(id==='bPick'||id==='btnFolders'&&!S.dir)return pick('shared');
  if(id==='bRecon')return reconnectAll();
  if(id==='btnFolders')return showGuide();
@@ -606,7 +749,7 @@ document.addEventListener('click',async e=>{
  if(id==='gRecon'){document.querySelector('.ov')?.remove();await reconnectAll();return showGuide();}
  if(id==='btnUser'){S.user='';await needUser();return render();}
  if(id==='btnHelp')return modal('How it works',
-  '<p><b>Parts</b>: search, filter, tick parts, then Add to print queue. Click a part for details, drawings and Edit.</p><p><b>Board</b>: drag parts between statuses.</p><p><b>Print queue</b>: print one paper color at a time. Double-sided, flip on long edge, 100% scale, no margins. Confirm the print to mark cards printed.</p><p><b>To Do</b>: quick counts of what needs attention.</p><p>Everything saves straight to the shared folder, and other people see changes within about 15 seconds. Add <code>#admin</code> to the web address for Admin tools (delete, restore, lists, export).</p>');
+  '<p><b>Parts</b>: search, filter, tick parts, then Add to print queue. Click a part for details, drawings and Edit.</p><p><b>Board</b>: drag parts between statuses.</p><p><b>Sheet</b>: every part and column in a spreadsheet grid. Edit cells directly, sort, filter each column, copy and paste.</p><p><b>Print queue</b>: print one paper color at a time. Double-sided, flip on long edge, 100% scale, no margins. Confirm the print to mark cards printed.</p><p><b>To Do</b>: quick counts of what needs attention.</p><p>Everything saves straight to the shared folder, and other people see changes within about 15 seconds. Add <code>#admin</code> to the web address for Admin tools (delete, restore, lists, export).</p>');
  if(id==='bNew'){if(!await needUser())return;const p={id:'new','Card Status':'Setup - Needs Info','Card Type':'Standard'};return openPart('new',{isNew:true,fresh:p});}
  if(id==='bView'){S.list=!S.list;return renderParts();}
  if(id==='bClear'){S.q='';S.f={status:'',color:'',rack:'',route:'',flag:''};return render();}
@@ -645,9 +788,9 @@ document.addEventListener('click',async e=>{
  if(id==='bSaveCfg'||id==='bSaveCfg2')return saveCfg();
 });
 document.addEventListener('input',e=>{const t=e.target;
- if(t.id==='q'){clearTimeout(S.qt);S.qt=setTimeout(()=>{S.q=t.value;S.shown=120;S.view==='board'?renderBoard():drawGrid();if(S.view==='board'){const q=$('#q');q.focus();q.setSelectionRange(q.value.length,q.value.length);}},140);}});
+ if(t.id==='q'){clearTimeout(S.qt);S.qt=setTimeout(()=>{S.q=t.value;S.shown=120;if(S.view==='sheet'){paintSheet(true);return;}S.view==='board'?renderBoard():drawGrid();if(S.view==='board'){const q=$('#q');q.focus();q.setSelectionRange(q.value.length,q.value.length);}},140);}});
 document.addEventListener('change',e=>{const t=e.target;const m={fStatus:'status',fColor:'color',fRack:'rack',fRoute:'route',fFlag:'flag'}[t.id];
- if(m){S.f[m]=t.value;S.shown=120;S.view==='board'?renderBoard():drawGrid();}});
+ if(m){S.f[m]=t.value;S.shown=120;S.view==='board'?renderBoard():S.view==='sheet'?(S.sc=null,paintSheet(true)):drawGrid();}});
 document.addEventListener('dragstart',e=>{const b=e.target.closest&&e.target.closest('.bc');if(b){e.dataTransfer.setData('text/plain',b.dataset.id);e.dataTransfer.effectAllowed='move';}});
 document.addEventListener('dragover',e=>{const c=e.target.closest&&e.target.closest('.col');if(c){e.preventDefault();$$('.col.over').forEach(x=>x!==c&&x.classList.remove('over'));c.classList.add('over');}});
 document.addEventListener('drop',async e=>{const c=e.target.closest&&e.target.closest('.col');if(!c)return;e.preventDefault();c.classList.remove('over');
