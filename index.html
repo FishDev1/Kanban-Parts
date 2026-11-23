@@ -280,13 +280,13 @@ function thumb(img){const key=img.dataset.key;phQ.push(async()=>{
 const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){io.unobserve(e.target);thumb(e.target);}},{rootMargin:'300px'});
 function watchThumbs(root){$$('img[data-key]',root).forEach(i=>io.observe(i));}
 async function fullURL(key){const f=await photoFile(key);return f?URL.createObjectURL(f):null;}
-const isCad=n=>/\.(dwg|slddrw|sldprt)$/i.test(n);
+const isCad=n=>/\.(dwg|slddrw|sldprt|sldasm)$/i.test(n);
 async function dwgFiles(key){
  if(!S.dwgDir||!key)return [];
  if(!S.dwgIdx){S.dwgIdx=new Map();try{for await(const [n,h] of S.dwgDir.entries())if(h.kind==='directory')S.dwgIdx.set(n.toLowerCase(),{h,files:null});}catch(e){}}
  const d=key[0];let ent=null;for(const [n,v] of S.dwgIdx)if(n.startsWith(d)&&n.endsWith('xxx'))ent=v;
  if(!ent)return [];
- if(!ent.files){ent.files=[];try{for await(const [n,h] of ent.h.entries())if(h.kind==='file'&&/\.(pdf|png|jpe?g|dwg|slddrw|sldprt)$/i.test(n))ent.files.push([n,h,ent.h.name]);}catch(e){}}
+ if(!ent.files){ent.files=[];try{for await(const [n,h] of ent.h.entries())if(h.kind==='file'&&/\.(pdf|png|jpe?g|dwg|slddrw|sldprt|sldasm)$/i.test(n))ent.files.push([n,h,ent.h.name]);}catch(e){}}
  const re=new RegExp('(^|[^0-9])'+key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([^0-9]|$)');
  return ent.files.filter(([n])=>re.test(n));}
 
@@ -422,7 +422,7 @@ async function openPart(id,opts2){
  (edit?'<button class="pri" id="dSave">Save</button><button id="dCancel">Cancel</button>':
  '<button class="pri" id="dEdit">Edit</button><button id="dDup">Duplicate</button><button id="dQueue">'+(S.queue.has(p.id)?'In queue ✓':'Add to queue')+'</button><button id="dTag" class="dng">'+(p['Delete Tag']?'Remove delete tag':'Tag for delete')+'</button>')+
  '<button id="dClose">✕</button></div><div class="db">'+
- (isNew?'':'<img class="big" id="bigph" alt="" style="display:none"><div class="muted" id="phnote"></div>'+(edit?'<div style="margin:6px 0">Replace photo: <input type="file" id="phfile" accept="image/*"></div>':'')+'<div class="ghd">Drawings</div><div class="dw" id="dwl"><span class="muted">'+(S.dwgDir?'Looking…':'Connect the Drawings root under Folders to see drawing files.')+'</span></div>'+
+ (isNew?'':'<img class="big" id="bigph" alt="" style="display:none"><div class="muted" id="phnote"></div>'+(edit?'<div style="margin:6px 0">Replace photo: <input type="file" id="phfile" accept="image/*"></div>':'')+'<div class="ghd">Drawings</div><div class="muted" style="font-size:12px;margin-bottom:4px">PDFs and images open in a new tab. Clicking a DWG or SolidWorks file (part, drawing, assembly) <b>downloads a copy</b> to your Downloads folder. Use <b>Copy path</b> to open the original instead.</div><div class="dw" id="dwl"><span class="muted">'+(S.dwgDir?'Looking…':'Connect the Drawings root under Folders to see drawing files.')+'</span></div>'+
  (fam.length?'<div class="ghd">Related (same base number)</div><div class="rel">'+fam.map(x=>'<a data-open="'+x.id+'">'+esc(title(x))+(x['Rack Location']?' · '+esc(x['Rack Location']):'')+'</a>').join('')+'</div>':''))+
  GROUPS.map(([g,fs])=>'<div class="ghd">'+g+'</div><div class="fg">'+fs.filter(f=>!(isNew&&g==='System')).map(f=>inputFor(f,p,edit,isNew)).join('')+'</div>').join('')+'</div>';
  d.classList.add('open');
