@@ -599,7 +599,10 @@ document.addEventListener('click',async e=>{
  if(id==='dQueue'){S.queue.add(S.edit.id);saveQueue();toast('Added to queue');return openPart(S.edit.id);}
  if(id==='dTag'){const p=S.byId.get(S.edit.id);try{await patch([p.id],{'Delete Tag':p['Delete Tag']?undefined:today()+' - tagged by '+(S.user||'?')});}catch(er){return modal('Error',esc(er.message));}render();return openPart(p.id);}
  if(id==='dDup'){if(!await needUser())return;const p=JSON.parse(JSON.stringify(S.byId.get(S.edit.id)));const fresh={...p,id:'new'};['Rack Location','Card ID','Delete Tag','Card Printed Date','Placed In Rack','Card Done/Shipped Date','Last Edited','Last Edited By'].forEach(k=>delete fresh[k]);fresh['Card Status']='Setup - Needs Info';return openPart('new',{isNew:true,fresh});}
- const dw=t.closest('[data-dwg]');if(dw){const files=$('#dwl')._files;const f=await files[dw.dataset.dwg][1].getFile();window.open(URL.createObjectURL(f),'_blank');return;}
+ const dw=t.closest('[data-dwg]');if(dw){e.preventDefault();const files=$('#dwl')._files;const w=window.open('','_blank');
+  try{const f=await files[dw.dataset.dwg][1].getFile();const u=URL.createObjectURL(f);
+   if(w){w.location.href=u;}else{const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';a.download=f.name;document.body.appendChild(a);a.click();a.remove();toast('Pop-ups are blocked for this page, so the drawing was downloaded instead. Allow pop-ups to open it in a new tab.',6000);}}
+  catch(er){if(w)w.close();toast('Could not open that drawing: '+er.message,5000);}return;}
  if(id==='bDelTag')return deleteTagged();
  if(t.dataset.rest)return restore(t.dataset.rest);
  if(id==='bBackup')return backupNow();
